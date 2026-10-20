@@ -18,4 +18,12 @@ describe("採点", () => {
       { answer: "ウ", selected: "ウ" },
     ])).toEqual({ correct: 2, total: 3, ratio: 2 / 3 });
   });
+
+  it("最新得点ではなく固定した初見得点だけで予想点を計算する", () => {
+    const questions = [
+      { id: "a", subject: "zaibun" as const, points: 20, firstLook: true, score: 0, firstLookScore: 20, firstLookPoints: 20, items: [] },
+      { id: "b", subject: "zaibun" as const, points: 30, firstLook: true, score: 0, firstLookScore: 10, firstLookPoints: 30, items: [] },
+    ];
+    expect(estimateSubjectScore(questions, "zaibun")).toBe(60);
+  });
 });

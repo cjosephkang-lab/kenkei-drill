@@ -327,6 +327,9 @@ def main() -> None:
     ap.add_argument("--plain", action="store_true", help="暗号化せず build/plain/ に出す（確認用）")
     ap.add_argument("--only", help="例: 39b")
     args = ap.parse_args()
+    if args.only and not args.plain:
+        # 公開用は全部の束を同じ salt でそろえ、目次も全件で作り直す必要がある（一部だけ作ると鍵と目次がずれる）
+        sys.exit("--only は --plain と一緒にだけ使える")
     password = os.environ.get("KENKEI_PASSWORD")
     if not args.plain and not password:
         sys.exit("KENKEI_PASSWORD が無い")
