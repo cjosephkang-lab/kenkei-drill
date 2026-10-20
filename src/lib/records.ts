@@ -1,7 +1,7 @@
 import type { Subject } from "./schedule";
 
 export type QuestionRecord = { questionId: string; subject: Subject; answeredAt: string; nextReviewAt?: string; score: number; points: number; firstLook: boolean; firstLookScore?: number; firstLookPoints?: number; firstLookAnsweredAt?: string; streak?: number };
-export type StudySession = { questionId: string; subject: Subject; startedAt: string; completedAt: string; score: number; points: number };
+export type StudySession = { questionId: string; subject: Subject; attemptId?: string; startedAt: string; completedAt: string; score: number; points: number };
 export type RecordsState = { version?: 1; questionRecords: Record<string, QuestionRecord>; studySessions: StudySession[]; mockScores: Record<string, number>; settings: { dailyGoalMinutes: number } };
 export const RECORDS_KEY = "kenkei-drill.records.v1";
 export const RECORDS_BACKUP_KEY = "kenkei-drill.records.invalid-backup.v1";
@@ -40,14 +40,15 @@ export const addStudyRecord = (records: RecordsState, session: StudySession): Re
 const localDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
 export const studyMinutesByDay = (sessions: StudySession[]) => {
-  const remainingByQuestion: Record<string, number> = {};
+  const remainingByAttempt: Record<string, number> = {};
   return sessions.reduce<Record<string, number>>((days, session) => {
     const start = new Date(session.startedAt).getTime();
     const end = new Date(session.completedAt).getTime();
-    const remaining = remainingByQuestion[session.questionId] ?? 60 * 60000;
+    const attemptKey = session.attemptId ?? session.questionId;
+    const remaining = remainingByAttempt[attemptKey] ?? 60 * 60000;
     const cappedEnd = Math.min(end, start + remaining);
     if (!Number.isFinite(start) || !Number.isFinite(cappedEnd) || cappedEnd <= start || remaining <= 0) return days;
-    remainingByQuestion[session.questionId] = remaining - (cappedEnd - start);
+    remainingByAttempt[attemptKey] = remaining - (cappedEnd - start);
     let cursor = new Date(start);
     while (cursor.getTime() < cappedEnd) {
       const nextMidnight = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1).getTime();

@@ -3,6 +3,7 @@ import { loadExamBundle, loadIndex, verifyPassword, type IndexData } from "./lib
 import { exportKeyForStorage, importKeyFromStorage } from "./lib/crypto";
 import { nextReviewDays, orderTodayQuestions, type Subject } from "./lib/schedule";
 import { addStudyRecord, loadRecords, saveRecords, studyMinutesByDay, type RecordsState } from "./lib/records";
+import { startStudy, touchStudy, shouldResumeStudy, type ActiveStudy } from "./lib/study";
 import { Mock } from "./components/Mock";
 import { Question } from "./components/Question";
 import { Settings } from "./components/Settings";
@@ -18,8 +19,6 @@ const dataBaseUrl = `${import.meta.env.BASE_URL}${dataDir}`;
 const todayKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const daysUntil = (date: string) => Math.ceil((new Date(`${date}T00:00:00`).getTime() - new Date(`${todayKey()}T00:00:00`).getTime()) / 86400000);
 const ACTIVE_STUDY_KEY = "kenkei-drill.active-study.v1";
-type StudySegment = { startedAt: string; completedAt?: string };
-type ActiveStudy = { questionId: string; segments: StudySegment[] };
 
 const makeMetadata = (index: IndexData): FullQuestion[] => index.exams.flatMap((exam) => exam.questions.map((question) => ({ ...question, id: `${exam.id}-${question.no}`, examId: exam.id, round: exam.round, subject: exam.subject, mock: exam.mock, problem: [], answer: [], explain: [], items: [] })));
 
@@ -46,11 +45,17 @@ function App() {
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); localStorage.setItem("kenkei-drill.dark", dark ? "1" : "0"); }, [dark]);
   useEffect(() => { loadIndex(dataBaseUrl).then((data) => { setIndex(data); setQuestions(makeMetadata(data)); }).catch(() => setError("データを読み込めません。index.jsonを確認してください。")); }, []);
   useEffect(() => { const stored = localStorage.getItem(KEY_STORAGE); if (stored) importKeyFromStorage(stored).then(setKey).catch(() => localStorage.removeItem(KEY_STORAGE)); }, []);
-  useEffect(() => { if (!startedAt) return undefined; const timer = window.setInterval(() => {
+  useEffect(() => { if (!startedAt || !activeStudy) return undefined; const timer = window.setInterval(() => {
     const completed = activeStudy?.segments.filter((segment) => segment.completedAt).reduce((sum, segment) => sum + (new Date(segment.completedAt as string).getTime() - new Date(segment.startedAt).getTime()) / 1000, 0) ?? 0;
     setElapsed(Math.min(3600, Math.floor(completed + (Date.now() - new Date(startedAt).getTime()) / 1000)));
-    localStorage.setItem(ACTIVE_STUDY_KEY, JSON.stringify(activeStudy ? { ...activeStudy, segments: activeStudy.segments.map((segment, index) => index === activeStudy.segments.length - 1 ? { ...segment, completedAt: undefined } : segment) } : null));
-  }, 1000); return () => window.clearInterval(timer); }, [startedAt, activeStudy]);
+  }, 1000);
+  const activityTimer = window.setInterval(() => {
+    const nextActive = touchStudy(activeStudy, new Date().toISOString());
+    setActiveStudy(nextActive);
+    localStorage.setItem(ACTIVE_STUDY_KEY, JSON.stringify(nextActive));
+  }, 30000);
+  return () => { window.clearInterval(timer); window.clearInterval(activityTimer); };
+  }, [startedAt, activeStudy]);
 
   useEffect(() => {
     const refresh = () => setScheduleVersion((value) => value + 1);
@@ -88,7 +93,7 @@ function App() {
     if (!metadata) return;
     const now = new Date().toISOString();
     const previous = activeStudy?.questionId === metadata.id ? activeStudy : null;
-    const nextActive: ActiveStudy = { questionId: metadata.id, segments: [...(previous?.segments ?? []), { startedAt: now }] };
+    const nextActive = startStudy(previous, metadata.id, now, crypto.randomUUID());
     setActiveStudy(nextActive); localStorage.setItem(ACTIVE_STUDY_KEY, JSON.stringify(nextActive));
     setSelectedId(metadata.id); setSelected({}); setRevealed(false); setStartedAt(now); setElapsed(0); setPage("study"); setLoadingQuestion(true); setError("");
     try { await loadQuestion(metadata); } catch { setError("読み込みに失敗しました。データ束と鍵を確認してください。"); } finally { setLoadingQuestion(false); }
@@ -110,11 +115,12 @@ function App() {
     const streak = ratio >= .7 ? (previous?.streak ?? 0) + 1 : 0;
     const next = new Date(Date.now() + nextReviewDays(ratio, previous?.streak ?? 0) * 86400000).toISOString();
     const now = new Date().toISOString();
+    const currentAttemptId = activeStudy?.questionId === current.id ? activeStudy.attemptId ?? crypto.randomUUID() : crypto.randomUUID();
     const currentSegments = (activeStudy?.questionId === current.id ? activeStudy.segments : [{ startedAt }]).map((segment, index, segments) => index === segments.length - 1 && !segment.completedAt ? { ...segment, completedAt: now } : segment);
     const nextRecord = { questionId: current.id, subject: current.subject, answeredAt: now, nextReviewAt: next, score: value, points: current.points, firstLook, streak,
       ...(previous?.firstLookScore !== undefined ? { firstLookScore: previous.firstLookScore, firstLookPoints: previous.firstLookPoints, firstLookAnsweredAt: previous.firstLookAnsweredAt } : firstLook ? { firstLookScore: value, firstLookPoints: current.points, firstLookAnsweredAt: now } : {}) };
     const nextRecords = { ...records, questionRecords: { ...records.questionRecords, [current.id]: nextRecord } };
-    const withStudy = currentSegments.reduce((state, segment) => segment.completedAt ? addStudyRecord(state, { questionId: current.id, subject: current.subject, startedAt: segment.startedAt, completedAt: segment.completedAt, score: value, points: current.points }) : state, nextRecords);
+    const withStudy = currentSegments.reduce((state, segment) => segment.completedAt ? addStudyRecord(state, { questionId: current.id, subject: current.subject, attemptId: currentAttemptId, startedAt: segment.startedAt, completedAt: segment.completedAt, score: value, points: current.points }) : state, nextRecords);
     if (!persistRecords(withStudy)) return;
     localStorage.removeItem(ACTIVE_STUDY_KEY); setActiveStudy(null); setPage("home"); setSelectedId(null); setStartedAt(null);
   };
@@ -135,11 +141,11 @@ function App() {
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "hidden") pauseStudy();
-      else if (document.visibilityState === "visible") resumeStudy();
+      else if (shouldResumeStudy(page, document.visibilityState)) resumeStudy();
     };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  });
+  }, [page, activeStudy, current, startedAt]);
 
   if (!key) return <Unlock dark={dark} error={error} onUnlock={unlock} />;
   if (!index) return <Shell><div className="p-8 text-center">読み込み中</div></Shell>;

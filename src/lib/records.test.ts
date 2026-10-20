@@ -31,6 +31,12 @@ describe("localStorage記録", () => {
     expect(studyMinutesByDay(next.studySessions)).toEqual({ "2026-10-20": 60 });
   });
 
+  it("別の解答は同じ大問でもそれぞれ60分まで日別に集計する", () => {
+    const first = addStudyRecord(empty, { questionId: "a", subject: "zaibun", attemptId: "attempt-1", startedAt: "2026-10-20T00:00:00Z", completedAt: "2026-10-20T02:00:00Z", score: 10, points: 20 });
+    const next = addStudyRecord(first, { questionId: "a", subject: "zaibun", attemptId: "attempt-2", startedAt: "2026-10-21T00:00:00Z", completedAt: "2026-10-21T02:00:00Z", score: 10, points: 20 });
+    expect(studyMinutesByDay(next.studySessions)).toEqual({ "2026-10-20": 60, "2026-10-21": 60 });
+  });
+
   it("firstLookの初見記録を移行し、最新の復習得点を初見値にしない", () => {
     const legacy: RecordsState = { ...empty, questionRecords: { a: { questionId: "a", subject: "zaibun", answeredAt: "2026-10-20T00:00:00.000Z", score: 8, points: 20, firstLook: true } } };
     saveRecords(legacy);
