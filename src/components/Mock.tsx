@@ -3,31 +3,266 @@ import { imageWidthPercent } from "../lib/images";
 import { ImageViewer } from "./ImageViewer";
 import type { RecordsState } from "../lib/records";
 import type { Subject } from "../lib/schedule";
-import type { FullQuestion, IndexData } from "./types";
+import { SUBJECT_LABEL, type FullQuestion, type IndexData } from "./types";
 
-function MockImage({ src, alt }: { src: string; alt: string }) {
+const LIMIT_SECONDS = 5400;
+type Phase = "pick" | "running" | "grading";
+
+function Figure({
+  src,
+  alt,
+  onZoom,
+}: {
+  src: string;
+  alt: string;
+  onZoom: (src: string) => void;
+}) {
   const [naturalWidth, setNaturalWidth] = useState(1300);
-  return <img className="block h-auto max-w-full rounded-2xl border border-black/10 bg-white shadow-sm" style={{ width: "100%", maxWidth: `${imageWidthPercent(naturalWidth)}%` }} src={src} alt={alt} onLoad={(event) => setNaturalWidth(event.currentTarget.naturalWidth)} />;
+  return (
+    <button className="q-fig" onClick={() => onZoom(src)}>
+      <img
+        src={src}
+        alt={alt}
+        style={{ maxWidth: `${imageWidthPercent(naturalWidth)}%` }}
+        onLoad={(event) => setNaturalWidth(event.currentTarget.naturalWidth)}
+      />
+    </button>
+  );
 }
 
-export function Mock({ index, questions, records, setRecords, loading, onStart }: { index: IndexData; questions: FullQuestion[]; records: RecordsState; setRecords: (value: RecordsState) => void; loading: boolean; onStart: (subject: Subject) => void }) {
-  const [subject, setSubject] = useState<Subject>("zaibun");
-  const [running, setRunning] = useState(false);
+export function Mock({
+  index,
+  questions,
+  records,
+  setRecords,
+  loading,
+  onStart,
+  onBack,
+}: {
+  index: IndexData;
+  questions: FullQuestion[];
+  records: RecordsState;
+  setRecords: (value: RecordsState) => boolean;
+  loading: boolean;
+  onStart: (subject: Subject) => void;
+  onBack: () => void;
+}) {
+  const [subject, setSubject] = useState<Subject | null>(null);
+  const [phase, setPhase] = useState<Phase>("pick");
   const [started, setStarted] = useState<number | null>(null);
-  const [remaining, setRemaining] = useState(5400);
+  const [remaining, setRemaining] = useState(LIMIT_SECONDS);
   const [scores, setScores] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState("");
   const [zoom, setZoom] = useState<string | null>(null);
-  const mock = questions.filter((question) => question.mock && question.subject === subject);
-  useEffect(() => { if (!running || !started) return undefined; const timer = window.setInterval(() => setRemaining(Math.max(0, 5400 - Math.floor((Date.now() - started) / 1000))), 1000); return () => window.clearInterval(timer); }, [running, started]);
-  const start = () => { onStart(subject); setStarted(Date.now()); setRemaining(5400); setRunning(true); };
-  const save = () => {
-    if (mock.length !== 5) return;
-    const values = mock.map((question) => Number(scores[question.id]));
-    if (values.some((value, index) => !Number.isFinite(value) || value < 0 || value > mock[index].points)) return;
-    const total = values.reduce((sum, value) => sum + value, 0);
-    const next = { ...records, mockScores: { ...records.mockScores, [`39-${subject}`]: total } };
-    setRecords(next);
+
+  const mockExams = index.exams.filter((exam) => exam.mock);
+  const mock = questions.filter(
+    (question) => question.mock && question.subject === subject,
+  );
+
+  useEffect(() => {
+    if (phase !== "running" || !started) return;
+    const timer = window.setInterval(() => {
+      const left = Math.max(
+        0,
+        LIMIT_SECONDS - Math.floor((Date.now() - started) / 1000),
+      );
+      setRemaining(left);
+      if (left === 0) setPhase("grading");
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [phase, started]);
+
+  const start = (next: Subject) => {
+    onStart(next);
+    setSubject(next);
+    setScores({});
+    setMessage("");
+    setStarted(Date.now());
+    setRemaining(LIMIT_SECONDS);
+    setPhase("running");
   };
+
+  const leave = () => {
+    if (
+      phase === "running" &&
+      !window.confirm("模試を中断してホームに戻りますか？")
+    )
+      return;
+    setPhase("pick");
+    onBack();
+  };
+
+  const save = () => {
+    if (!subject || mock.length === 0) return;
+    const values = mock.map((question) => Number(scores[question.id]));
+    const invalid = values.some(
+      (value, i) =>
+        scores[mock[i].id] === undefined ||
+        scores[mock[i].id] === "" ||
+        !Number.isFinite(value) ||
+        value < 0 ||
+        value > mock[i].points,
+    );
+    if (invalid) {
+      setMessage("すべての大問に、0から配点までの点数を入れてください。");
+      return;
+    }
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const saved = setRecords({
+      ...records,
+      mockScores: { ...records.mockScores, [`39-${subject}`]: total },
+    });
+    if (!saved) return;
+    setMessage(`${total}点を記録しました。`);
+  };
+
   const mm = Math.floor(remaining / 60);
-  return <section><h1 className="mb-2 text-3xl font-black">模試</h1><p className="mb-6 opacity-60">第39回・90分。大問を通しで解き、最後にまとめて自己採点します。</p>{!running ? <><div className="rounded-3xl bg-emerald-950 p-5 text-white"><label className="text-sm text-emerald-200">科目を選ぶ<select className="mt-2 block w-full rounded-xl bg-white/10 p-3 text-white" value={subject} onChange={(event) => setSubject(event.target.value as Subject)}><option value="zaibun">財務分析</option><option value="zaihyou">財務諸表</option><option value="genka">原価計算</option></select></label><p className="mt-4 text-2xl font-bold">{loading ? "読み込み中" : `${mock.length}題 / 90:00`}</p><button className="mt-4 rounded-xl bg-lime-300 px-4 py-3 font-bold text-emerald-950" onClick={start} disabled={loading}>模試を開始</button></div><div className="mt-5 rounded-3xl bg-white/70 p-5 dark:bg-white/5"><p className="text-sm opacity-60">記録済み</p><p className="text-3xl font-black">{records.mockScores[`39-${subject}`] ?? "—"}<span className="text-sm"> / 100点</span></p></div></> : <><div className="sticky top-2 z-10 mb-4 flex items-center justify-between rounded-2xl bg-red-800 p-4 font-mono text-xl text-white"><span>残り {mm}:{String(remaining % 60).padStart(2, "0")}</span><button className="rounded-xl bg-white/20 px-3 py-2 text-sm font-sans" onClick={() => setRunning(false)}>終了して採点</button></div>{loading ? <p className="rounded-2xl bg-white/70 p-5">読み込み中</p> : <div className="space-y-8">{mock.map((question) => <div key={question.id}><p className="mb-2 font-bold">大問 {question.no} / {question.points}点</p>{question.problem.map((src, index) => <MockImage key={`${src}-${index}`} src={src} alt={`問題${question.no}-${index + 1}`} />)}</div>)}</div>}</>}{!running && started && <div className="mt-5 space-y-6 rounded-3xl border border-emerald-700/30 bg-emerald-50 p-5 dark:bg-emerald-950/30"><p className="font-bold">模試の自己採点</p>{mock.map((question) => <div key={question.id} className="rounded-2xl bg-white/70 p-3 dark:bg-white/5"><p className="mb-2 font-bold">大問 {question.no} / {question.points}点</p>{[...question.answer, ...question.explain].map((src, index) => <img key={`${src}-${index}`} className="mb-2 block max-w-full cursor-zoom-in rounded-xl" src={src} alt={index < question.answer.length ? `解答${question.no}-${index + 1}` : `解説${question.no}-${index - question.answer.length + 1}`} onClick={() => setZoom(src)} />)}<div className="grid grid-cols-4 gap-2">{[[question.points, "満点"], [question.points * .7, "7割"], [question.points * .5, "半分"], [0, "0点"]].map(([value, label]) => <button key={label as string} className="rounded-xl bg-white px-2 py-2 text-xs font-bold dark:bg-white/10" onClick={() => setScores((current) => ({ ...current, [question.id]: String(value) }))}>{label as string}<br />{value as number}</button>)}</div><input className="mt-2 w-full rounded-xl border border-black/10 bg-white px-3 py-3 dark:bg-white/10" type="number" min="0" max={question.points} value={scores[question.id] ?? ""} onChange={(event) => setScores((current) => ({ ...current, [question.id]: event.target.value }))} /></div>)}<button className="w-full rounded-xl bg-emerald-800 px-4 py-3 font-bold text-white" onClick={save}>合計 {mock.reduce((sum, question) => sum + Number(scores[question.id] || 0), 0)}点を保存</button></div>}{zoom && <ImageViewer src={zoom} naturalWidth={1300} onClose={() => setZoom(null)} />}<p className="mt-5 text-xs opacity-50">{index.exams.filter((exam) => exam.mock).length ? "第39回は通常ドリルから除外されています。" : "mock=true のデータがありません。"}</p></section>;
+  const ss = String(remaining % 60).padStart(2, "0");
+  const total = mock.reduce(
+    (sum, question) => sum + Number(scores[question.id] || 0),
+    0,
+  );
+
+  return (
+    <section className="home-pad">
+      <div className="bar">
+        <button className="back" onClick={leave} aria-label="ホームに戻る">
+          ←
+        </button>
+        <div className="ttl">
+          {phase === "pick" || !subject
+            ? "模試"
+            : `模試・${SUBJECT_LABEL[subject]}`}
+        </div>
+      </div>
+
+      {phase === "pick" && (
+        <>
+          <p className="note">
+            第39回を本番と同じ90分で通して解きます。終わったら解答と解説を見て、まとめて自己採点します。普段のドリルには出しません。
+          </p>
+          {mockExams.length === 0 && (
+            <p className="note">模試用の回が収録されていません。</p>
+          )}
+          {mockExams.map((exam) => {
+            const recorded = records.mockScores[`39-${exam.subject}`];
+            return (
+              <button
+                className="card"
+                key={exam.id}
+                onClick={() => start(exam.subject)}
+              >
+                <h2>
+                  第{exam.round}回 {SUBJECT_LABEL[exam.subject]}
+                </h2>
+                <p>
+                  {exam.questions.length}題・90分
+                  {recorded !== undefined ? `・記録 ${recorded}点` : ""}
+                </p>
+                <span className="go">始める →</span>
+              </button>
+            );
+          })}
+        </>
+      )}
+
+      {phase === "running" && (
+        <>
+          <div className="mock-timer">
+            <span className="mono">
+              残り {mm}:{ss}
+            </span>
+            <button className="link" onClick={() => setPhase("grading")}>
+              終了して採点
+            </button>
+          </div>
+          {loading && <p className="note">読み込み中</p>}
+          {!loading &&
+            mock.map((question) => (
+              <div className="card" key={question.id}>
+                <h2>
+                  大問{question.no}
+                  <span className="mock-pts">{question.points}点</span>
+                </h2>
+                {question.problem.map((src, i) => (
+                  <Figure
+                    key={`${src}-${i}`}
+                    src={src}
+                    alt={`問題${question.no}-${i + 1}`}
+                    onZoom={setZoom}
+                  />
+                ))}
+              </div>
+            ))}
+        </>
+      )}
+
+      {phase === "grading" && (
+        <>
+          <p className="note">
+            解答と解説を見て、大問ごとに点数を入れてください。
+          </p>
+          {mock.map((question) => (
+            <div className="card" key={question.id}>
+              <h2>
+                大問{question.no}
+                <span className="mock-pts">{question.points}点</span>
+              </h2>
+              {[...question.answer, ...question.explain].map((src, i) => (
+                <Figure
+                  key={`${src}-${i}`}
+                  src={src}
+                  alt={`解答・解説${question.no}-${i + 1}`}
+                  onZoom={setZoom}
+                />
+              ))}
+              <div className="score-grid">
+                {[
+                  [question.points, "満点"],
+                  [question.points * 0.7, "7割"],
+                  [question.points * 0.5, "半分"],
+                  [0, "0点"],
+                ].map(([value, label]) => (
+                  <button
+                    key={label}
+                    onClick={() =>
+                      setScores({ ...scores, [question.id]: String(value) })
+                    }
+                  >
+                    {label}
+                    <br />
+                    <span className="mono">{value}</span>
+                  </button>
+                ))}
+              </div>
+              <input
+                className="score-input"
+                type="number"
+                min="0"
+                max={question.points}
+                placeholder="点数を入力"
+                value={scores[question.id] ?? ""}
+                onChange={(event) =>
+                  setScores({ ...scores, [question.id]: event.target.value })
+                }
+              />
+            </div>
+          ))}
+          {message && <p className="note">{message}</p>}
+          <button className="start-btn" onClick={save}>
+            合計 {total}点を記録する
+          </button>
+        </>
+      )}
+
+      {zoom && (
+        <ImageViewer
+          src={zoom}
+          naturalWidth={1300}
+          onClose={() => setZoom(null)}
+        />
+      )}
+    </section>
+  );
 }
