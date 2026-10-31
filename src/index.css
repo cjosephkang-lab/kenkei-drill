@@ -64,3 +64,10 @@ button,input,select { font:inherit; } button { -webkit-tap-highlight-color:trans
 .k2-acc-pick button { min-height:44px; padding:6px 8px; border:1px solid var(--hair); border-radius:var(--rs); background:var(--bg); color:var(--ink); text-align:left; font-size:14px; cursor:pointer; }
 .k2-cell-code { width:120px; }.k2-input td.ok .k2-cell-code { border-color:var(--ok); background:var(--ok-soft); }.k2-input td.ng .k2-cell-code { border-color:var(--ng); background:var(--ng-soft); }
 .k2-acc-pick .sym { height:auto; font-weight:400; }.k2-acc-pick .sym.ok b,.k2-acc-pick .sym.picked b { color:inherit; }
+
+/* 2級: TAC の解説（文字）と Claude に聞く */
+.k2-ex { margin-top:12px; padding:12px 14px; border:1px solid var(--hair); border-left:3px solid var(--acc-line); border-radius:var(--rs); background:var(--sf); }
+.k2-ex-h { color:var(--ink2); font-size:12px; font-weight:700; }
+.k2-ex .k2-p { margin:6px 0; white-space:pre-line; }
+.k2-ask { margin-top:8px; padding:8px 12px; border:1px solid var(--acc-line); border-radius:var(--rs); background:var(--acc-soft); color:var(--acc); font-size:14px; font-weight:700; cursor:pointer; }
+.k2-note { margin:10px 0 0; color:var(--ink2); font-size:12px; }

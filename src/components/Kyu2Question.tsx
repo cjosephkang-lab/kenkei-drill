@@ -5,10 +5,12 @@ import {
   gradeQuestion,
   journalRows,
   type Kyu2Block,
+  type Kyu2Explain,
   type Kyu2Inputs,
   type Kyu2Part,
   type Kyu2Unit,
 } from "../lib/kyu2";
+import { askPrompt, askUrl, explainByPart } from "../lib/kyu2Explain";
 import { ImageViewer } from "./ImageViewer";
 import type { FullQuestion } from "./types";
 
@@ -61,6 +63,29 @@ function Block({ block }: { block: Kyu2Block }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// TAC の解説の1節。「Claude に聞く」は、問題・答え・この解説を1つの文にして claude.ai を開く（サブスクの Claude で聞ける）
+function Explain({
+  section,
+  onAsk,
+}: {
+  section: Kyu2Explain;
+  onAsk: () => void;
+}) {
+  return (
+    <div className="k2-ex">
+      <div className="k2-ex-h">
+        解説（TAC）{section.label} {section.title}
+      </div>
+      {section.blocks.map((block, b) => (
+        <Block block={block} key={b} />
+      ))}
+      <button className="k2-ask" onClick={onAsk}>
+        この解説を Claude に聞く
+      </button>
     </div>
   );
 }
@@ -257,7 +282,15 @@ export function Kyu2Question({
   };
   const [picking, setPicking] = useState<string | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [asked, setAsked] = useState(false);
   const names = accountNames(data);
+  const explained = explainByPart(data);
+  const ask = (section: Kyu2Explain) => {
+    const text = askPrompt(data, `第${question.round}回 第${question.no}問`, section);
+    navigator.clipboard?.writeText(text).catch(() => {}); // URL に入りきらない時は貼り付けてもらう
+    window.open(askUrl(text), "_blank");
+    setAsked(true);
+  };
   const graded = gradeQuestion(data, question.points, inputs);
   const result = new Map(graded.units.map((unit) => [unit.key, unit]));
   useEffect(() => {
@@ -365,6 +398,12 @@ export function Kyu2Question({
                   </div>
                 </div>
               )}
+              {revealed &&
+                explained.byPart
+                  .get(i)
+                  ?.map((section, n) => (
+                    <Explain key={n} section={section} onAsk={() => ask(section)} />
+                  ))}
             </div>
           );
         })}
@@ -387,7 +426,15 @@ export function Kyu2Question({
                 欄が正解。点は欄の数で割った目安です（本番の配点の内訳は公表されていません）。
               </p>
             </div>
-            {question.explain.length > 0 && (
+            {explained.rest.map((section, n) => (
+              <Explain key={n} section={section} onAsk={() => ask(section)} />
+            ))}
+            {asked && (
+              <p className="k2-note">
+                質問の文をコピーしました。Claude の入力欄に入っていなければ、貼り付けてください。
+              </p>
+            )}
+            {!data.explain && question.explain.length > 0 && (
               <div className="explain">
                 <strong>解説（TAC）</strong>
                 {question.explain.map((src, n) => (

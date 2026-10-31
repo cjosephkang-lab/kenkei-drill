@@ -329,15 +329,20 @@ def build_kyu2(rnd: int, tmp: Path) -> dict:
     questions = []
     for no in range(1, 6):
         q = json.loads((KYU2_SRC / str(rnd) / f"q{no}.json").read_text(encoding="utf-8"))
+        kyu2 = {"title": q["title"], "problem": q["problem"], "parts": q["parts"]}
+        # 解説を文字に起こした物（e<番号>.json）があれば、それを答えの下に出す。画像は入れない
+        text = KYU2_SRC / str(rnd) / f"e{no}.json"
+        if text.exists():
+            kyu2["explain"] = json.loads(text.read_text(encoding="utf-8"))["sections"]
         exp = explains.get(no)
         questions.append({
             "no": no,
             "points": q["points"],
             "problem": [],
             "answer": [],
-            "explain": crop_section(exp, pages[exp.pdf]) if exp else [],
+            "explain": crop_section(exp, pages[exp.pdf]) if exp and "explain" not in kyu2 else [],
             "items": [],
-            "kyu2": {"title": q["title"], "problem": q["problem"], "parts": q["parts"]},
+            "kyu2": kyu2,
         })
     total = sum(q["points"] for q in questions)
     if total != 100:
@@ -441,7 +446,8 @@ def main() -> None:
             (out_dir / f"{exam_id}.bin").write_bytes(encrypt(json.dumps(payload, ensure_ascii=False).encode()))
         size = sum(len(u) for q in exam["questions"] for u in q["explain"])
         print(f"{exam_id}: 配点 {[q['points'] for q in exam['questions']]} 解説の画像 {size/1e6:.1f}MB "
-              f"解説なし {[q['no'] for q in exam['questions'] if not q['explain']]}", flush=True)
+              f"解説が文字 {[q['no'] for q in exam['questions'] if 'explain' in q['kyu2']]} "
+              f"解説なし {[q['no'] for q in exam['questions'] if not q['explain'] and 'explain' not in q['kyu2']]}", flush=True)
     (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
 
 

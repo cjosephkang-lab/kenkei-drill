@@ -35,10 +35,13 @@ export type Kyu2Part =
       head?: string[][];
       rows: Kyu2Cell[][];
     };
+// TAC の解説の1節。label が答える欄の label と同じなら、その欄の答えの下に出す
+export type Kyu2Explain = { label: string; title?: string; blocks: Kyu2Block[] };
 export type Kyu2Data = {
   title: string;
   problem: Kyu2Block[];
   parts: Kyu2Part[];
+  explain?: Kyu2Explain[];
 };
 export type Kyu2Inputs = Record<string, string>;
 export type Kyu2Unit = { key: string; ok: boolean; expected: string };
