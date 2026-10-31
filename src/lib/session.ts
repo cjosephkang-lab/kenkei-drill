@@ -18,6 +18,17 @@ export const advanceSession = (
   index: session.index + 1,
   results: [...session.results, result],
 });
+// 前の問題に戻る: 記録済みの大問を振り返る（記録は付け直さない）。index が results の数より小さい間は振り返り
+export const reviewing = (session: SessionState) =>
+  session.index < session.results.length;
+export const backSession = (session: SessionState): SessionState => ({
+  ...session,
+  index: Math.max(0, session.index - 1),
+});
+export const forwardSession = (session: SessionState): SessionState => ({
+  ...session,
+  index: Math.min(session.results.length, session.index + 1),
+});
 export function completeQuestion(
   records: RecordsState,
   current: FullQuestion,

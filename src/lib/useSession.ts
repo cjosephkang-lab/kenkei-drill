@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { FullQuestion } from "../components/types";
 import {
   advanceSession,
+  backSession,
+  forwardSession,
   type SessionResult,
   type SessionState,
 } from "./session";
@@ -21,5 +23,15 @@ export function useSession() {
     setSession(next);
     return next.queue[next.index];
   };
-  return { session, begin, advance };
+  const back = () => {
+    const next = backSession(session);
+    setSession(next);
+    return next.queue[next.index];
+  };
+  const forward = () => {
+    const next = forwardSession(session);
+    setSession(next);
+    return next.queue[next.index];
+  };
+  return { session, begin, advance, back, forward };
 }

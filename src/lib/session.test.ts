@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { advanceSession, completeQuestion, type SessionState } from "./session";
+import {
+  advanceSession,
+  backSession,
+  completeQuestion,
+  forwardSession,
+  reviewing,
+  type SessionState,
+} from "./session";
 import type { FullQuestion } from "../components/types";
 import type { RecordsState } from "./records";
 
@@ -161,5 +168,40 @@ describe("解答記録", () => {
       ["original", "2026-10-30T00:05:00.000Z"],
       ["original", now],
     ]);
+  });
+});
+
+describe("前の問題に戻る", () => {
+  const three: SessionState = {
+    queue: [question, { ...question, id: "b" }, { ...question, id: "c" }],
+    index: 2,
+    results: [
+      { score: 10, points: 20 },
+      { score: 20, points: 20 },
+    ],
+    name: "今日の学習",
+  };
+
+  it("1つ前に戻ると、記録済みの大問を振り返る画面になる", () => {
+    const back = backSession(three);
+    expect(back.index).toBe(1);
+    expect(reviewing(back)).toBe(true);
+    expect(back.results).toEqual(three.results); // 戻っても結果は消さない
+  });
+
+  it("最初の大問より前には戻らない", () => {
+    expect(backSession({ ...three, index: 0 }).index).toBe(0);
+  });
+
+  it("振り返りから進むと、まだ解いていない大問に戻り、その先へは記録なしで進まない", () => {
+    const back = backSession(backSession(three));
+    expect(back.index).toBe(0);
+    const once = forwardSession(back);
+    expect(once.index).toBe(1);
+    expect(reviewing(once)).toBe(true);
+    const twice = forwardSession(once);
+    expect(twice.index).toBe(2);
+    expect(reviewing(twice)).toBe(false);
+    expect(forwardSession(twice).index).toBe(2);
   });
 });

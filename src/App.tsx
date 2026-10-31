@@ -17,7 +17,7 @@ import {
 import { useStudy } from "./lib/useStudy";
 import { useSession } from "./lib/useSession";
 import { useRecordFiles } from "./lib/useRecordFiles";
-import { completeQuestion } from "./lib/session";
+import { completeQuestion, reviewing } from "./lib/session";
 import { Cats } from "./components/Cats";
 import { Result } from "./components/Result";
 import { Mock } from "./components/Mock";
@@ -59,7 +59,7 @@ function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState(false);
-  const { session, begin: beginSession, advance } = useSession();
+  const { session, begin: beginSession, advance, back, forward } = useSession();
   const study = useStudy(page, selectedId ?? undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -129,8 +129,9 @@ function App() {
       setError("パスワードが違います");
     }
   };
-  const openQuestion = async (metadata: FullQuestion) => {
-    study.start(metadata.id);
+  // review: 前の問題に戻って記録済みの大問を見る。学習時間は計らない（解きかけの大問の時間はそのまま残る）
+  const openQuestion = async (metadata: FullQuestion, review = false) => {
+    if (!review) study.start(metadata.id);
     setSelectedId(metadata.id);
     setSelected({});
     setRevealed(false);
@@ -186,6 +187,14 @@ function App() {
     if (next) void openQuestion(next);
     else setPage("result");
     return true;
+  };
+  const goPrev = () => {
+    study.pause();
+    void openQuestion(back(), true);
+  };
+  const goNext = () => {
+    const next = forward();
+    void openQuestion(next, session.index + 1 < session.results.length);
   };
   if (!key) return <Unlock error={error} onUnlock={unlock} />;
   if (!index)
@@ -262,10 +271,13 @@ function App() {
       />
     ) : page === "study" && current?.kyu2 ? (
       <Kyu2Question
-        key={current.id}
+        key={`${current.id}:${reviewing(session)}`}
         question={current}
         elapsed={study.elapsed}
         onFinish={finish}
+        review={reviewing(session)}
+        onPrev={session.index > 0 ? goPrev : undefined}
+        onNext={goNext}
         position={session.index + 1}
         total={session.queue.length}
         onBack={() => {

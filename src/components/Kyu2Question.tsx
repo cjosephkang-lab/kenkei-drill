@@ -11,15 +11,18 @@ import {
   type Kyu2Unit,
 } from "../lib/kyu2";
 import { askPrompt, askUrl, explainByPart } from "../lib/kyu2Explain";
+import { loadMemo, saveMemo } from "../lib/memo";
 import { ImageViewer } from "./ImageViewer";
 import type { FullQuestion } from "./types";
 
 const draftKey = (id: string) => `kenkei-drill.kyu2-draft.v1.${id}`;
 // 答え合わせをした印。開き直しても答え合わせの後の画面に戻す（答えを見てから直した点を初見の得点にしない）
 const revealedKey = (id: string) => `kenkei-drill.kyu2-revealed.v1.${id}`;
-const loadDraft = (id: string): Kyu2Inputs => {
+// 記録した時の答え。前の問題に戻った時、打った答えと採点を見せる
+const answersKey = (id: string) => `kenkei-drill.kyu2-answers.v1.${id}`;
+const loadInputs = (key: string): Kyu2Inputs => {
   try {
-    return JSON.parse(localStorage.getItem(draftKey(id)) ?? "{}");
+    return JSON.parse(localStorage.getItem(key) ?? "{}");
   } catch {
     return {}; // 壊れた下書きは捨てて空から始める
   }
@@ -257,6 +260,9 @@ export function Kyu2Question({
   total,
   onFinish,
   onBack,
+  review,
+  onPrev,
+  onNext,
 }: {
   question: FullQuestion;
   elapsed: number;
@@ -264,14 +270,26 @@ export function Kyu2Question({
   total: number;
   onFinish: (score: number) => boolean;
   onBack: () => void;
+  review: boolean; // 前の問題に戻って、記録済みの大問を見ている（記録は付け直さない）
+  onPrev?: () => void;
+  onNext: () => void;
 }) {
   const data = question.kyu2!;
   const [inputs, setInputs] = useState<Kyu2Inputs>(() =>
-    loadDraft(question.id),
+    loadInputs(review ? answersKey(question.id) : draftKey(question.id)),
   );
   const [revealed, setRevealedState] = useState(
-    () => localStorage.getItem(revealedKey(question.id)) === "1",
+    () => review || localStorage.getItem(revealedKey(question.id)) === "1",
   );
+  const [memo, setMemo] = useState(() => loadMemo(question.id));
+  const writeMemo = (text: string) => {
+    setMemo(text);
+    try {
+      saveMemo(question.id, text);
+    } catch {
+      // 保存できない端末では、メモは画面の中にだけ残る
+    }
+  };
   const setRevealed = (value: boolean) => {
     setRevealedState(value);
     try {
@@ -299,16 +317,22 @@ export function Kyu2Question({
   const graded = gradeQuestion(data, question.points, inputs);
   const result = new Map(graded.units.map((unit) => [unit.key, unit]));
   useEffect(() => {
+    if (review) return; // 振り返りでは打てないので下書きも作らない
     try {
       localStorage.setItem(draftKey(question.id), JSON.stringify(inputs));
     } catch {
       // 保存できない端末では下書きを残さない（打った答えは画面の中には残る）
     }
-  }, [inputs, question.id]);
+  }, [inputs, question.id, review]);
   const set = (key: string, value: string) =>
     setInputs((all) => ({ ...all, [key]: value }));
   const finish = () => {
     if (!onFinish(graded.score)) return; // 記録できなかった時は下書きを残す
+    try {
+      localStorage.setItem(answersKey(question.id), JSON.stringify(inputs));
+    } catch {
+      // 保存できない端末では、前の問題に戻った時に答えが空で出る
+    }
     localStorage.removeItem(draftKey(question.id));
     localStorage.removeItem(revealedKey(question.id));
   };
@@ -337,10 +361,22 @@ export function Kyu2Question({
           </span>
           <span className="chip src">{data.title}</span>
           <span className="chip src">{question.points}点</span>
-          <span className="chip src mono" style={{ marginLeft: "auto" }}>
-            {min}:{String(elapsed % 60).padStart(2, "0")}
-          </span>
+          {review ? (
+            <span className="chip src" style={{ marginLeft: "auto" }}>
+              振り返り
+            </span>
+          ) : (
+            <span className="chip src mono" style={{ marginLeft: "auto" }}>
+              {min}:{String(elapsed % 60).padStart(2, "0")}
+            </span>
+          )}
         </div>
+        {memo && !revealed && (
+          <div className="k2-memo-last">
+            <div className="k2-ex-h">前回の振り返りメモ</div>
+            <p className="k2-p">{memo}</p>
+          </div>
+        )}
         {data.problem.map((block, b) => (
           <Block block={block} key={b} />
         ))}
@@ -463,14 +499,27 @@ export function Kyu2Question({
                 ))}
               </div>
             )}
+            <label className="k2-memo">
+              <span className="k2-ex-h">振り返りメモ</span>
+              <textarea
+                value={memo}
+                placeholder="間違えた理由・次に気をつけること。次にこの大問を開くと、問題の上に出ます"
+                onChange={(e) => writeMemo(e.target.value)}
+              />
+            </label>
             <button
               className="start-btn"
               style={{ marginTop: 16 }}
-              onClick={finish}
+              onClick={review ? onNext : finish}
             >
-              記録して次へ
+              {review ? "次の問題へ" : "記録して次へ"}
             </button>
           </>
+        )}
+        {onPrev && (
+          <button className="k2-prev" onClick={onPrev}>
+            ← 前の問題
+          </button>
         )}
       </div>
       {picking && (
