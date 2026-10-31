@@ -12,6 +12,7 @@ import {
 } from "../lib/kyu2";
 import { askPrompt, askUrl, explainByPart } from "../lib/kyu2Explain";
 import { loadMemo, saveMemo } from "../lib/memo";
+import { autoCells, costCards, costKind } from "../lib/costTable";
 import { entryCount, isSeisan, seisanAccounts, seisanInputs, typedIntoTable } from "../lib/seisan";
 import { ImageViewer } from "./ImageViewer";
 import type { FullQuestion } from "./types";
@@ -315,6 +316,65 @@ function Seisan({
   );
 }
 
+// 原価計算の表: 考える所の欄だけをカード（工事ごと・部門ごと）で縦に打ち、表は足し算の欄を埋めて見せる
+function CostTable({
+  part,
+  i,
+  inputs,
+  set,
+  revealed,
+  result,
+  pick,
+}: FieldProps & {
+  part: Extract<Kyu2Part, { kind: "table" }>;
+  i: number;
+  pick: (key: string) => void;
+}) {
+  return (
+    <>
+      <p className="k2-note">
+        {costKind(part) === "kobetsu"
+          ? "工事ごとに打つと、完成・未成の行と計の列はアプリが足します。"
+          : "部門費合計と、補助部門から各部門へ配る額を打つと、配る総額・合計・配賦金額はアプリが足します。"}
+      </p>
+      {costCards(part, i).map((card) => (
+        <div className="k2-entry" key={card.title}>
+          <div className="k2-ex-h">{card.title}</div>
+          {card.fields.map(([key, label]) => {
+            const unit = result.get(key);
+            return (
+              <label className={`k2-field ${revealed ? mark(unit) : ""}`} key={key}>
+                <span>{label}</span>
+                <input
+                  className="k2-amt mono"
+                  inputMode="numeric"
+                  disabled={revealed}
+                  value={inputs[key] ?? ""}
+                  onChange={(e) => set(key, e.target.value)}
+                />
+                {revealed && unit && !unit.ok && (
+                  <span className="k2-cell-expect mono">{unit.expected}</span>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      ))}
+      <Table
+        part={part}
+        i={i}
+        inputs={{ ...inputs, ...autoCells(part, i, inputs) }}
+        set={set}
+        revealed={revealed}
+        result={result}
+        pick={pick}
+        names={new Map()}
+        locked
+      />
+    </>
+  );
+}
+
 export function Kyu2Question({
   question,
   elapsed,
@@ -478,7 +538,10 @@ export function Kyu2Question({
                   {...field}
                 />
               )}
-              {part.kind === "table" && (!isSeisan(part) || typedIntoTable(inputs, i)) && (
+              {part.kind === "table" && costKind(part) && (
+                <CostTable part={part} i={i} pick={setPicking} {...field} />
+              )}
+              {part.kind === "table" && !costKind(part) && (!isSeisan(part) || typedIntoTable(inputs, i)) && (
                 <Table
                   part={part}
                   i={i}

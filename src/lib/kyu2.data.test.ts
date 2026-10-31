@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gradeQuestion, type Kyu2Data, type Kyu2Inputs } from "./kyu2";
+import { costCards, costKind } from "./costTable";
 import { isSeisan } from "./seisan";
 
 const root = join(__dirname, "../../source-2kyu");
@@ -42,6 +43,15 @@ const perfect = (data: Kyu2Data): Kyu2Inputs => {
             inputs[`${i}:j:0:${side}:${lines[side]}:a`] = String(value);
             lines[side] += 1;
           }
+        }),
+      );
+    } else if (costKind(part)) {
+      // 原価計算の表はカードの欄（考える所）だけを打つ。足し算の欄はアプリが埋める
+      const fields = new Set(costCards(part, i).flatMap((card) => card.fields.map(([key]) => key)));
+      part.rows.forEach((row, r) =>
+        row.forEach((cell, c) => {
+          if (fields.has(`${i}:${r}:${c}`) && typeof cell !== "string" && "a" in cell)
+            inputs[`${i}:${r}:${c}`] = cell.a.join(" ");
         }),
       );
     } else

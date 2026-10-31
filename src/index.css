@@ -78,3 +78,11 @@ button,input,select { font:inherit; } button { -webkit-tap-highlight-color:trans
 .k2-memo { display:block; margin-top:16px; }
 .k2-memo textarea { display:block; width:100%; min-height:96px; margin-top:6px; padding:10px; border:1px solid var(--hair); border-radius:var(--rs); background:var(--sf); color:var(--ink); font-family:var(--sans); font-size:16px; line-height:1.6; box-sizing:border-box; }
 .k2-prev { display:block; width:100%; min-height:44px; margin-top:10px; border:1px solid var(--hair); border-radius:var(--rs); background:var(--sf); color:var(--ink2); font-size:14px; font-weight:700; cursor:pointer; }
+/* 2級: 原価計算の表のカード（工事ごと・部門ごとに縦に打つ） */
+.k2-field { display:grid; grid-template-columns:1fr 9.5em; align-items:center; gap:4px 10px; padding:6px 0; border-top:1px solid var(--hair); font-size:14px; }
+.k2-field:first-of-type { border-top:0; }
+.k2-field .k2-cell-expect { grid-column:2; }
+.k2-field.ok input { border-color:var(--ok); background:var(--ok-soft); }
+.k2-field.ng input { border-color:var(--ng); background:var(--ng-soft); }
+.k2-entry { margin-top:10px; padding:10px 12px; border:1px solid var(--hair); border-radius:var(--rs); background:var(--sf); }
+.k2-entry > .k2-ex-h { margin-bottom:4px; }
