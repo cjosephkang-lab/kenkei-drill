@@ -334,7 +334,8 @@ def build_kyu2(rnd: int, tmp: Path) -> dict:
         text = KYU2_SRC / str(rnd) / f"e{no}.json"
         if text.exists():
             sections = json.loads(text.read_text(encoding="utf-8"))["sections"]
-            if not sections or any(not sec.get("blocks") for sec in sections):
+            filled = lambda b: (b.get("text") or "").strip() if b["t"] == "p" else any(c.strip() for row in b.get("rows", []) for c in row)
+            if not sections or any(not any(filled(b) for b in sec.get("blocks", [])) for sec in sections):
                 raise ValueError(f"{text}: 解説の節が空（scripts/check_kyu2_explain.py で確かめる）")
             kyu2["explain"] = sections
         exp = explains.get(no)
