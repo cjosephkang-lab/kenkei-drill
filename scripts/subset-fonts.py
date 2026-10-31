@@ -28,7 +28,7 @@ def source_characters() -> str:
 
 
 def subset_font(name: str, chars: str) -> None:
-    font = TTFont(SOURCE / name)
+    font = TTFont(SOURCE / name, recalcTimestamp=False)  # 作った日時を埋め込まない（ビルドのたびに差分が出ないように）
     options = subset.Options()
     options.flavor = "woff2"
     options.layout_features = ["*"]
