@@ -1,4 +1,4 @@
-import { autoCells, costKind } from "./costTable";
+import { autoCells, costKind, typedIntoAuto } from "./costTable";
 import { isSeisan, seisanInputs, typedIntoTable } from "./seisan";
 // 2級の大問: 問題文の並びと答えの欄、端末の中での採点。形の決まりは docs/kyu2-data-format.md
 export type Kyu2Block =
@@ -188,7 +188,7 @@ export const gradeQuestion = (
       const cells =
         isSeisan(part) && !typedIntoTable(inputs, i)
           ? { ...inputs, ...seisanInputs(part, i, inputs) }
-          : costKind(part)
+          : costKind(part) && !typedIntoAuto(part, i, inputs)
             ? { ...inputs, ...autoCells(part, i, inputs) } // 原価計算の表は足し算の欄を埋める（costTable.ts）
             : inputs;
       part.rows.forEach((row, r) =>

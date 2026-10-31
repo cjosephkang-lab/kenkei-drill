@@ -12,7 +12,7 @@ import {
 } from "../lib/kyu2";
 import { askPrompt, askUrl, explainByPart } from "../lib/kyu2Explain";
 import { loadMemo, saveMemo } from "../lib/memo";
-import { autoCells, costCards, costKind } from "../lib/costTable";
+import { autoCells, costCards, costKind, typedIntoAuto } from "../lib/costTable";
 import { entryCount, isSeisan, seisanAccounts, seisanInputs, typedIntoTable } from "../lib/seisan";
 import { ImageViewer } from "./ImageViewer";
 import type { FullQuestion } from "./types";
@@ -538,10 +538,12 @@ export function Kyu2Question({
                   {...field}
                 />
               )}
-              {part.kind === "table" && costKind(part) && (
+              {part.kind === "table" && costKind(part) && !typedIntoAuto(part, i, inputs) && (
                 <CostTable part={part} i={i} pick={setPicking} {...field} />
               )}
-              {part.kind === "table" && !costKind(part) && (!isSeisan(part) || typedIntoTable(inputs, i)) && (
+              {part.kind === "table" &&
+                !(costKind(part) && !typedIntoAuto(part, i, inputs)) &&
+                (!isSeisan(part) || typedIntoTable(inputs, i)) && (
                 <Table
                   part={part}
                   i={i}

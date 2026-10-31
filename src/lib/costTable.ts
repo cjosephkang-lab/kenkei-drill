@@ -57,6 +57,10 @@ export const costCards = (part: Table, i: number): CostCard[] => {
   }));
 };
 
+// カードで打つ形（2026-10-31）より前に、表の足し算の欄へ直接打った下書き・答え。カードは足し算の欄に書かないので、そこに値があれば前の形
+export const typedIntoAuto = (part: Table, i: number, inputs: Kyu2Inputs) =>
+  Object.keys(autoCells(part, i, {})).some((key) => (inputs[key] ?? "").trim() !== "");
+
 export const autoCells = (part: Table, i: number, inputs: Kyu2Inputs): Kyu2Inputs => {
   const values = new Map<string, number>();
   const get = (r: number, c: number) => values.get(`${r}:${c}`) ?? sumAmounts(inputs[`${i}:${r}:${c}`]) ?? 0;
@@ -83,11 +87,14 @@ export const autoCells = (part: Table, i: number, inputs: Kyu2Inputs): Kyu2Input
       return total;
     };
     if (base >= 0) put(base, 1, given(base));
-    for (const r of allocations) {
-      const total = given(r);
-      put(r, 1, total);
-      put(r, own(r), total); // 補助部門が配る総額（自分の部門費＋ほかの補助部門から受けた分）
-    }
+    allocations.forEach((r, n) => {
+      // 補助部門が配る総額＝自分の部門費＋先に配った補助部門から受けた額（配った先の合計ではない）
+      const held =
+        (base >= 0 ? get(base, own(r)) : 0) +
+        allocations.slice(0, n).reduce((s, a) => s + get(a, own(r)), 0);
+      put(r, 1, held);
+      put(r, own(r), held);
+    });
     part.rows.forEach((row, r) => {
       const name = nameOf(row);
       if (r === base || allocations.includes(r) || !(name === "合計" || name.includes("配賦金額"))) return;

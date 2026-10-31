@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gradeQuestion, type Kyu2Data, type Kyu2Part } from "./kyu2";
-import { autoCells, costCards, costKind } from "./costTable";
+import { autoCells, costCards, costKind, typedIntoAuto } from "./costTable";
 
 const e = (...a: number[]) => ({ a });
 
@@ -114,5 +114,22 @@ describe("原価計算表の足し算の欄をアプリが埋める", () => {
     });
     expect(gradeQuestion(one(kobetsu), 14, typedKobetsu).score).toBe(14);
     expect(gradeQuestion(one(bumon), 24, typedBumon).score).toBe(24);
+  });
+
+  it("補助部門が配る総額は、自分の部門費＋先に配った補助部門から受けた額（配った先の合計ではない）", () => {
+    const cells = autoCells(bumon, 0, { ...typedBumon, "0:1:4": "0" });
+    expect(cells["0:2:4"]).toBe("120");
+    expect(cells["0:2:1"]).toBe("120");
+  });
+
+  it("前に表の足し算の欄へ直接打った答えは、表に打つ形のまま採点する", () => {
+    const old = { ...typedKobetsu, "0:4:1": "111", "0:4:3": "111" };
+    expect(typedIntoAuto(kobetsu, 0, old)).toBe(true);
+    expect(typedIntoAuto(kobetsu, 0, typedKobetsu)).toBe(false);
+    const one: Kyu2Data = { title: "原価計算", problem: [], parts: [kobetsu] };
+    // 材料費 No.1 だけ誤り・完成の行は前に打った 111 のまま → 完成の行は○のまま
+    const wrong = { ...old, "0:2:1": "11" };
+    const units = gradeQuestion(one, 14, wrong).units;
+    expect(units.find((u) => u.key === "0:4:1")?.ok).toBe(true);
   });
 });
