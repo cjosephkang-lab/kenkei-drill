@@ -276,7 +276,12 @@ export function Kyu2Question({
 }) {
   const data = question.kyu2!;
   const [inputs, setInputs] = useState<Kyu2Inputs>(() =>
-    loadInputs(review ? answersKey(question.id) : draftKey(question.id)),
+    // 記録時の答えが保存できなかった時は下書きを残してあるので、そちらを見せる
+    loadInputs(
+      review && localStorage.getItem(answersKey(question.id)) !== null
+        ? answersKey(question.id)
+        : draftKey(question.id),
+    ),
   );
   const [revealed, setRevealedState] = useState(
     () => review || localStorage.getItem(revealedKey(question.id)) === "1",
@@ -330,10 +335,11 @@ export function Kyu2Question({
     if (!onFinish(graded.score)) return; // 記録できなかった時は下書きを残す
     try {
       localStorage.setItem(answersKey(question.id), JSON.stringify(inputs));
+      localStorage.removeItem(draftKey(question.id));
     } catch {
-      // 保存できない端末では、前の問題に戻った時に答えが空で出る
+      // 保存できない時は、前回の答えを消して下書きを残す（前の問題に戻ると下書きを見せる）
+      localStorage.removeItem(answersKey(question.id));
     }
-    localStorage.removeItem(draftKey(question.id));
     localStorage.removeItem(revealedKey(question.id));
   };
   const field = { inputs, set, revealed, result };
