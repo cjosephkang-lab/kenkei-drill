@@ -1,3 +1,4 @@
+import { isSeisan, seisanInputs } from "./seisan";
 // 2級の大問: 問題文の並びと答えの欄、端末の中での採点。形の決まりは docs/kyu2-data-format.md
 export type Kyu2Block =
   | { t: "p"; text: string }
@@ -93,12 +94,14 @@ const yen = (value: number) => value.toLocaleString("ja-JP");
 const sum = (values: number[]) =>
   values.reduce((total, value) => total + value, 0);
 
+// part は欄の番号。精算表の整理仕訳は "4:j:0"（欄・仕訳の番号）のような前置き
 export const journalRows = (
   inputs: Kyu2Inputs,
-  part: number,
+  part: number | string,
   side: "d" | "k",
+  min = 3, // 精算表の整理仕訳は1行から
 ) => {
-  let rows = Math.max(3, Number(inputs[`${part}:${side}:n`]) || 0);
+  let rows = Math.max(min, Number(inputs[`${part}:${side}:n`]) || 0);
   for (const key of Object.keys(inputs)) {
     const match = key.match(new RegExp(`^${part}:${side}:(\\d+):`));
     if (match && inputs[key]) rows = Math.max(rows, Number(match[1]) + 1);
@@ -180,15 +183,17 @@ export const gradeQuestion = (
         expected: part.a,
       });
     } else {
+      // 精算表は整理仕訳から欄を組み立てて採点する（seisan.ts）
+      const cells = isSeisan(part) ? { ...inputs, ...seisanInputs(part, i, inputs) } : inputs;
       part.rows.forEach((row, r) =>
         row.forEach((cell, c) => {
           if (typeof cell === "string") return;
           const key = `${i}:${r}:${c}`;
           if ("s" in cell) {
-            units.push({ key, ok: toSymbol(inputs[key]) === cell.s, expected: `${cell.s} ${names.get(cell.s) ?? ""}`.trim() });
+            units.push({ key, ok: toSymbol(cells[key]) === cell.s, expected: `${cell.s} ${names.get(cell.s) ?? ""}`.trim() });
             return;
           }
-          const typed = sumAmounts(inputs[key]);
+          const typed = sumAmounts(cells[key]);
           if (!cell.a.length) {
             if (typed) units.push({ key, ok: false, expected: "（空欄）" });
             return;

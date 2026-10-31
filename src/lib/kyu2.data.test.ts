@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gradeQuestion, type Kyu2Data, type Kyu2Inputs } from "./kyu2";
+import { isSeisan } from "./seisan";
 
 const root = join(__dirname, "../../source-2kyu");
 const files = existsSync(root)
@@ -29,7 +30,21 @@ const perfect = (data: Kyu2Data): Kyu2Inputs => {
       });
     } else if (part.kind === "number") inputs[`${i}`] = String(part.a);
     else if (part.kind === "symbol") inputs[`${i}`] = part.a;
-    else
+    else if (isSeisan(part)) {
+      // 精算表は整理記入の答えを1つの仕訳にまとめて打つ（借方の科目・金額をすべて借方に、貸方も同じ）
+      const lines = { d: 0, k: 0 };
+      part.rows.forEach((row, r) =>
+        ([["d", 3], ["k", 4]] as const).forEach(([side, c]) => {
+          const cell = row[c];
+          if (typeof cell === "string" || !("a" in cell)) return;
+          for (const value of cell.a) {
+            inputs[`${i}:j:0:${side}:${lines[side]}:c`] = `r${r}`;
+            inputs[`${i}:j:0:${side}:${lines[side]}:a`] = String(value);
+            lines[side] += 1;
+          }
+        }),
+      );
+    } else
       part.rows.forEach((row, r) =>
         row.forEach((cell, c) => {
           if (typeof cell === "string") return;
@@ -50,6 +65,8 @@ describe.skipIf(!files.length)("2級のデータ", () => {
       parts: q.parts,
     };
     expect(gradeQuestion(data, q.points, perfect(data)).score).toBe(q.points);
-    expect(gradeQuestion(data, q.points, {}).score).toBe(0);
+    // 精算表は仕訳が無くても試算表の金額が損益計算書・貸借対照表へ移るので、0点にはならない
+    if (!data.parts.some(isSeisan))
+      expect(gradeQuestion(data, q.points, {}).score).toBe(0);
   });
 });

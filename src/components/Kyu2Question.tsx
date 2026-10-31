@@ -12,6 +12,7 @@ import {
 } from "../lib/kyu2";
 import { askPrompt, askUrl, explainByPart } from "../lib/kyu2Explain";
 import { loadMemo, saveMemo } from "../lib/memo";
+import { entryCount, isSeisan, seisanAccounts, seisanInputs } from "../lib/seisan";
 import { ImageViewer } from "./ImageViewer";
 import type { FullQuestion } from "./types";
 
@@ -102,22 +103,26 @@ type FieldProps = {
 
 const mark = (unit?: Kyu2Unit) => (unit ? (unit.ok ? "ok" : "ng") : "");
 
+// prefix は欄の番号（"2"）か、精算表の整理仕訳の番号（"4:j:0"）。label は記号から画面に出す名前
 function Journal({
-  i,
+  prefix,
+  unit,
   inputs,
   set,
   revealed,
-  result,
   pick,
-  names,
-}: FieldProps & {
-  i: number;
+  label,
+  minRows,
+}: Omit<FieldProps, "result"> & {
+  prefix: string;
+  minRows?: number;
+  unit?: Kyu2Unit;
   pick: (key: string) => void;
-  names: Map<string, string>;
+  label: (code: string) => string;
 }) {
-  const unit = result.get(`${i}`);
+  const i = prefix;
   const side = (s: "d" | "k", name: string) => {
-    const rows = journalRows(inputs, i, s);
+    const rows = journalRows(inputs, i, s, minRows);
     return (
       <div className="k2-side">
         <div className="k2-side-h">{name}</div>
@@ -129,8 +134,8 @@ function Journal({
               onClick={() => pick(`${i}:${s}:${r}:c`)}
             >
               {inputs[`${i}:${s}:${r}:c`]
-                ? `${inputs[`${i}:${s}:${r}:c`]} ${names.get(inputs[`${i}:${s}:${r}:c`]) ?? ""}`
-                : "記号"}
+                ? label(inputs[`${i}:${s}:${r}:c`])
+                : "科目"}
             </button>
             <input
               className="k2-amt mono"
@@ -187,11 +192,13 @@ function Table({
   result,
   pick,
   names,
+  locked,
 }: FieldProps & {
   part: Extract<Kyu2Part, { kind: "table" }>;
   i: number;
   pick: (key: string) => void;
   names: Map<string, string>;
+  locked?: boolean; // 精算表: 整理仕訳から組み立てた値を見せるだけで、打てない
 }) {
   return (
     <div className="k2-scroll">
@@ -233,7 +240,7 @@ function Table({
                     <input
                       className="mono"
                       inputMode="numeric"
-                      disabled={revealed}
+                      disabled={revealed || locked}
                       value={inputs[key] ?? ""}
                       onChange={(e) => set(key, e.target.value)}
                     />
@@ -250,6 +257,61 @@ function Table({
         </tbody>
       </table>
     </div>
+  );
+}
+
+// 精算表: 整理仕訳だけを打ち、精算表は seisanInputs で組み立てて見せる
+function Seisan({
+  part,
+  i,
+  inputs,
+  set,
+  revealed,
+  result,
+  pick,
+}: FieldProps & {
+  part: Extract<Kyu2Part, { kind: "table" }>;
+  i: number;
+  pick: (key: string) => void;
+}) {
+  const accounts = new Map(seisanAccounts(part).map((a) => [a.code, a.name]));
+  const count = entryCount(inputs, i);
+  return (
+    <>
+      <p className="k2-note">
+        整理記入の仕訳を1つずつ打つと、下の精算表が埋まります。科目は精算表の科目から選びます。
+      </p>
+      {Array.from({ length: count }, (_, n) => (
+        <div className="k2-entry" key={n}>
+          <div className="k2-ex-h">仕訳 {n + 1}</div>
+          <Journal
+            prefix={`${i}:j:${n}`}
+            pick={pick}
+            label={(code) => accounts.get(code) ?? code}
+            minRows={1}
+            inputs={inputs}
+            set={set}
+            revealed={revealed}
+          />
+        </div>
+      ))}
+      {!revealed && (
+        <button className="k2-addrow" onClick={() => set(`${i}:j:n`, String(count + 1))}>
+          ＋ 仕訳を足す
+        </button>
+      )}
+      <Table
+        part={part}
+        i={i}
+        inputs={{ ...inputs, ...seisanInputs(part, i, inputs) }}
+        set={set}
+        revealed={revealed}
+        result={result}
+        pick={pick}
+        names={new Map()}
+        locked
+      />
+    </>
   );
 }
 
@@ -309,6 +371,13 @@ export function Kyu2Question({
   const [asked, setAsked] = useState<{ ok: true } | { ok: false; text: string } | null>(null);
   const names = accountNames(data);
   const explained = explainByPart(data);
+  // 科目を選ぶ一覧。精算表の整理仕訳（"4:j:0:d:0:c"）は精算表の科目（記号は出さない）、ほかは勘定科目群
+  const pickerOptions = (key: string): [string, string, boolean][] => {
+    const part = data.parts[Number(key.split(":")[0])];
+    return /^\d+:j:/.test(key) && part?.kind === "table" && isSeisan(part)
+      ? seisanAccounts(part).map((a) => [a.code, a.name, false])
+      : [...names].map(([code, name]) => [code, name, true]);
+  };
   const ask = (section: Kyu2Explain) => {
     const text = askPrompt(data, `第${question.round}回 第${question.no}問`, section);
     // Safari はタップの中でないとコピーも別タブも許さないので、待たずに両方を始める。URL に入りきらない時は貼り付けてもらう
@@ -393,9 +462,23 @@ export function Kyu2Question({
               <div className="k2-label">{part.label}</div>
               {part.prompt && <p className="k2-p">{part.prompt}</p>}
               {part.kind === "journal" && (
-                <Journal i={i} pick={setPicking} names={names} {...field} />
+                <Journal
+                  prefix={`${i}`}
+                  unit={unit}
+                  pick={setPicking}
+                  label={(code) => `${code} ${names.get(code) ?? ""}`}
+                  {...field}
+                />
               )}
-              {part.kind === "table" && (
+              {part.kind === "table" && isSeisan(part) && (
+                <Seisan
+                  part={part}
+                  i={i}
+                  pick={setPicking}
+                  {...field}
+                />
+              )}
+              {part.kind === "table" && !isSeisan(part) && (
                 <Table
                   part={part}
                   i={i}
@@ -533,7 +616,7 @@ export function Kyu2Question({
           <div className="k2-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="k2-cap">勘定科目を選ぶ</div>
             <div className="k2-acc k2-acc-pick">
-              {[...names].map(([code, name]) => (
+              {pickerOptions(picking).map(([code, name, shown]) => (
                 <button
                   key={code}
                   onClick={() => {
@@ -541,7 +624,7 @@ export function Kyu2Question({
                     setPicking(null);
                   }}
                 >
-                  <b>{code}</b>
+                  {shown && <b>{code}</b>}
                   {name}
                 </button>
               ))}
