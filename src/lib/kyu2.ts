@@ -121,6 +121,15 @@ const typedSide = (inputs: Kyu2Inputs, part: number, side: "d" | "k") => {
   return sideTotals(lines);
 };
 
+// 科目ごとに借方−貸方で比べる。同じ科目が両側にある仕訳（当座預金の借方 19,700,000・貸方 150,000）を
+// 差し引いた1行（借方 19,550,000）で書いても○にする（会計上は同じ。第35回 第1問(2)）
+const net = (debit: Map<string, number>, credit: Map<string, number>) => {
+  const out = new Map(debit);
+  for (const [code, value] of credit) out.set(code, (out.get(code) ?? 0) - value);
+  for (const [code, value] of out) if (value === 0) out.delete(code);
+  return out;
+};
+
 const sameTotals = (a: Map<string, number>, b: Map<string, number>) =>
   a.size === b.size && [...a].every(([code, value]) => b.get(code) === value);
 
@@ -149,9 +158,10 @@ export const gradeQuestion = (
           .join("・");
       units.push({
         key: `${i}`,
-        ok:
-          sameTotals(typedSide(inputs, i, "d"), sideTotals(part.debit)) &&
-          sameTotals(typedSide(inputs, i, "k"), sideTotals(part.credit)),
+        ok: sameTotals(
+          net(typedSide(inputs, i, "d"), typedSide(inputs, i, "k")),
+          net(sideTotals(part.debit), sideTotals(part.credit)),
+        ),
         expected: `借方 ${show(part.debit)}／貸方 ${show(part.credit)}`,
       });
     } else if (part.kind === "number") {

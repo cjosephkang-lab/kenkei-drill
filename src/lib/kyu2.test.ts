@@ -80,6 +80,17 @@ describe("仕訳の採点", () => {
     expect(result.units.map((u) => u.ok)).toEqual([true, true]);
     expect(result.score).toBe(20);
   });
+  it("同じ科目が借方と貸方の両方にある仕訳は、差し引いた1行で書いても○", () => {
+    const bond: Kyu2Data = {
+      title: "仕訳",
+      problem: [{ t: "choices", title: "勘定科目群", items: [["Ｂ", "当座預金"], ["Ｈ", "社債"], ["Ｓ", "社債発行費"]] }],
+      parts: [{ kind: "journal", label: "(2)", debit: [["Ｂ", 19700000], ["Ｓ", 150000]], credit: [["Ｈ", 19700000], ["Ｂ", 150000]] }],
+    };
+    const netted = { "0:d:0:c": "Ｂ", "0:d:0:a": "19550000", "0:d:1:c": "Ｓ", "0:d:1:a": "150000", "0:k:0:c": "Ｈ", "0:k:0:a": "19700000" };
+    expect(gradeQuestion(bond, 4, netted).units[0].ok).toBe(true);
+    const asTac = { ...netted, "0:d:0:a": "19700000", "0:k:1:c": "Ｂ", "0:k:1:a": "150000" };
+    expect(gradeQuestion(bond, 4, asTac).units[0].ok).toBe(true);
+  });
   it("貸方の1行が欠けたら×", () => {
     const inputs = {
       "0:d:0:c": "Ｑ",
