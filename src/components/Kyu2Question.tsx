@@ -282,14 +282,19 @@ export function Kyu2Question({
   };
   const [picking, setPicking] = useState<string | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
-  const [asked, setAsked] = useState(false);
+  // コピーできた時は "ok"、できなかった時は質問の文（画面に出して手で写してもらう）
+  const [asked, setAsked] = useState<{ ok: true } | { ok: false; text: string } | null>(null);
   const names = accountNames(data);
   const explained = explainByPart(data);
   const ask = (section: Kyu2Explain) => {
     const text = askPrompt(data, `第${question.round}回 第${question.no}問`, section);
-    navigator.clipboard?.writeText(text).catch(() => {}); // URL に入りきらない時は貼り付けてもらう
+    // Safari はタップの中でないとコピーも別タブも許さないので、待たずに両方を始める。URL に入りきらない時は貼り付けてもらう
+    const copied = navigator.clipboard?.writeText(text) ?? Promise.reject();
+    copied.then(
+      () => setAsked({ ok: true }),
+      () => setAsked({ ok: false, text }),
+    );
     window.open(askUrl(text), "_blank");
-    setAsked(true);
   };
   const graded = gradeQuestion(data, question.points, inputs);
   const result = new Map(graded.units.map((unit) => [unit.key, unit]));
@@ -429,10 +434,20 @@ export function Kyu2Question({
             {explained.rest.map((section, n) => (
               <Explain key={n} section={section} onAsk={() => ask(section)} />
             ))}
-            {asked && (
+            {asked?.ok && (
               <p className="k2-note">
                 質問の文をコピーしました。Claude の入力欄に入っていなければ、貼り付けてください。
               </p>
+            )}
+            {asked && !asked.ok && (
+              <div className="k2-note">
+                コピーできませんでした。下の文を長押しで全部選んでコピーし、
+                <a href="https://claude.ai/new" target="_blank" rel="noreferrer">
+                  Claude
+                </a>
+                に貼り付けてください。
+                <textarea className="k2-ask-text" readOnly value={asked.text} />
+              </div>
             )}
             {!data.explain && question.explain.length > 0 && (
               <div className="explain">

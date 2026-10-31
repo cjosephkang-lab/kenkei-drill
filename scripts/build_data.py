@@ -333,7 +333,10 @@ def build_kyu2(rnd: int, tmp: Path) -> dict:
         # 解説を文字に起こした物（e<番号>.json）があれば、それを答えの下に出す。画像は入れない
         text = KYU2_SRC / str(rnd) / f"e{no}.json"
         if text.exists():
-            kyu2["explain"] = json.loads(text.read_text(encoding="utf-8"))["sections"]
+            sections = json.loads(text.read_text(encoding="utf-8"))["sections"]
+            if not sections or any(not sec.get("blocks") for sec in sections):
+                raise ValueError(f"{text}: 解説の節が空（scripts/check_kyu2_explain.py で確かめる）")
+            kyu2["explain"] = sections
         exp = explains.get(no)
         questions.append({
             "no": no,

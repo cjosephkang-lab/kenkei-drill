@@ -106,10 +106,12 @@ describe("Claude に聞く文", () => {
     expect(text).not.toContain("売上から原価を引く。"); // ほかの欄の解説は入れない
   });
 
-  it("欄に対応しない解説（精算表の整理事項など）は表も文字にする", () => {
+  it("欄に対応しない解説（精算表の整理事項など）は表も文字にし、すべての欄の正しい答えを入れる", () => {
     const text = askPrompt(data, "第38回 第5問", data.explain![1]);
     expect(text).toContain("借方 | 金額");
     expect(text).toContain("現金 | 100");
+    expect(text).toContain("借方 Ｂ 当座預金 100");
+    expect(text).toContain("￥10,800");
   });
 
   it("数の欄の答えは単位つき", () => {

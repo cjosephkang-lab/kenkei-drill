@@ -5,7 +5,8 @@
 
 文字起こしにある数（3桁以上か小数）が、PDF のその大問の部分に無ければ「PDFに無い数」として出す（写し間違い・足した数）。
 PDF にあって文字起こしに無い数は「落ちた数」として出す（省略）。
-文の段落（式でない物）は、空白を除いて PDF の文字にそのまま含まれるかを見て、含まれない物を「PDFと違う段落」として出す（言い換え・写し間違い）。形の決まり: docs/kyu2-data-format.md の「解説」
+文の段落（式でない物）は、空白を除いて PDF の文字にそのまま含まれるかを見て、含まれない物を「PDFと違う段落」として出す（言い換え・写し間違い）。
+拾えない物: 仕訳の借方と貸方の取り違え・式の＋と－・表の欄の位置・どの欄の解説かの見出し。これは原本の画像と見比べて確かめる（2026-10-31 は Sonnet が全20大問を画像と照合し、codex が見出しの誤りを拾った）。形の決まり: docs/kyu2-data-format.md の「解説」
 """
 from __future__ import annotations
 
@@ -22,6 +23,12 @@ from build_data import KYU2_ROUNDS, ROUNDS, SRC, ZEN  # noqa: E402
 
 # PDF の文字の層にだけあり、印刷では見えない数（同じ位置に重なった古い文字）。画像で確かめた
 HIDDEN = {(37, 2): {"1500"}}  # 第37回 第2問(3)「原価＠1,500円」が「原価＠350円」の下に重なっている（2026-10-31）
+
+# PDF の図（枠の中の項目名と金額）を1段落に並べた物。空白を除いても PDF の文字の並びと一致しない。画像で確かめた
+LAYOUT_OK = {
+    "期首再振替　3,000円　当期分　148,000円　当期支払額　150,000円　期末前払額　5,000円",  # 第35回 第2問 前払費用の図
+    "（＊1）投資有価証券の取得原価",  # 第36回 第1問 PDF は半角の括弧
+}
 
 HEAD = re.compile(r"〔第[0-9０-９\x02-\x0a]+問〕")
 
@@ -85,12 +92,13 @@ def main() -> int:
             for s in data["sections"]:
                 mine += numbers(texts(s["blocks"]) + " " + s.get("title", ""))
             pdf = numbers(secs[no - 1])
-            extra = sorted(set(mine) - set(pdf))
-            lost = sorted(set(pdf) - set(mine) - HIDDEN.get((rnd, no), set()))
+            # 回数まで比べる（同じ金額が2回出る所の片方が落ちた・1回を2回写した、も拾う）
+            extra = sorted((mine - pdf).elements())
+            lost = sorted((pdf - mine - Counter(HIDDEN.get((rnd, no), set()))).elements())
             # 「問２」は「問２ 1」「問２ 2」…をまとめた解説（src/lib/kyu2Explain.ts の partsOf と同じ決まり）
             unmatched = [s["label"] for s in data["sections"] if s["label"] not in labels and not any(l.startswith(s["label"] + " ") for l in labels)]
-            odd = [t for s in data["sections"] for t in odd_paragraphs(s["blocks"], secs[no - 1])]
-            if extra or lost:
+            odd = [t for s in data["sections"] for t in odd_paragraphs(s["blocks"], secs[no - 1]) if t not in LAYOUT_OK]
+            if extra or lost or odd or not data["sections"]:
                 bad += 1
             print(f"{rnd}/e{no}: 節 {len(data['sections'])}（欄に合わない label {unmatched or 'なし'}）"
                   f" PDFに無い数 {extra or 'なし'} 落ちた数 {lost or 'なし'} PDFと違う段落 {len(odd)}")

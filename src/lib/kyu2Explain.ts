@@ -44,13 +44,19 @@ const answerText = (data: Kyu2Data, i: number) => {
   return [...(part.head ?? []).map((row) => row.join(" | ")), ...part.rows.map((row) => row.map(cell).join(" | "))].join("\n");
 };
 
+// 欄に対応しない解説（精算表の整理事項など）は、どの欄の話か決められないので、すべての欄の答えを入れる
+const askParts = (data: Kyu2Data, section: Kyu2Explain) => {
+  const parts = partsOf(data, section);
+  return parts.length ? parts : data.parts.map((_, i) => i);
+};
+
 export const askPrompt = (data: Kyu2Data, where: string, section: Kyu2Explain) =>
   [
     `建設業経理士2級の過去問（${where}「${data.title}」）を勉強しています。下の TAC の解説を、初めて学ぶ人にもわかるように、かみ砕いて説明してください。なぜその仕訳・計算になるのかを一歩ずつお願いします。`,
     "",
     "【問題】",
     ...data.problem.map(blockText),
-    ...partsOf(data, section).flatMap((i) => [
+    ...askParts(data, section).flatMap((i) => [
       "",
       `【${data.parts[i].label}】`,
       ...(data.parts[i].prompt ? [data.parts[i].prompt!] : []),
