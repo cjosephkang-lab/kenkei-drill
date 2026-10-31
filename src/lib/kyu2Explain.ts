@@ -67,8 +67,10 @@ export const askPrompt = (data: Kyu2Data, where: string, section: Kyu2Explain) =
     ...section.blocks.map(blockText),
   ].join("\n");
 
-// 長い URL は開けない端末があるので、長い時は新しい会話だけを開き、文は貼り付けてもらう
-const MAX_URL = 6000;
+// claude.ai は ?q= の文を入力欄に入れる（送信はボタンを押す。自動では送られない）。
+// Chrome で約4万5千字の URL まで末尾まで入ることを確かめた（2026-11-01）。解説は最長でも約2万2千字なので全部入る。
+// それより長い時だけ新しい会話を開き、コピーした文を貼り付けてもらう
+const MAX_URL = 32000;
 export const askUrl = (text: string) => {
   const url = `https://claude.ai/new?q=${encodeURIComponent(text)}`;
   return url.length <= MAX_URL ? url : "https://claude.ai/new";

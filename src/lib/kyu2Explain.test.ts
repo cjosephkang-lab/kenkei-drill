@@ -118,10 +118,11 @@ describe("Claude に聞く文", () => {
     expect(askPrompt(data, "x", data.explain![0])).toContain("￥10,800");
   });
 
-  it("長すぎる文は URL に入れず、Claude の新しい会話だけを開く", () => {
+  it("いちばん長い解説（URL で約2万2千字）まで入力欄に入れ、それより長すぎる文だけ新しい会話を開く", () => {
     expect(askUrl("短い")).toBe(
       `https://claude.ai/new?q=${encodeURIComponent("短い")}`,
     );
-    expect(askUrl("あ".repeat(3000))).toBe("https://claude.ai/new");
+    expect(askUrl("あ".repeat(2600))).toContain("?q=");
+    expect(askUrl("あ".repeat(4000))).toBe("https://claude.ai/new");
   });
 });

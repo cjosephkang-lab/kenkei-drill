@@ -440,7 +440,7 @@ export function Kyu2Question({
   };
   const ask = (section: Kyu2Explain) => {
     const text = askPrompt(data, `第${question.round}回 第${question.no}問`, section);
-    // Safari はタップの中でないとコピーも別タブも許さないので、待たずに両方を始める。URL に入りきらない時は貼り付けてもらう
+    // Safari はタップの中でないとコピーも別タブも許さないので、待たずに両方を始める。コピーは入力欄に入らなかった時の予備
     const copied = navigator.clipboard?.writeText(text) ?? Promise.reject();
     copied.then(
       () => setAsked({ ok: true }),
@@ -626,7 +626,7 @@ export function Kyu2Question({
             ))}
             {asked?.ok && (
               <p className="k2-note">
-                質問の文をコピーしました。Claude の入力欄に入っていなければ、貼り付けてください。
+                Claude の入力欄に質問を入れました。送信ボタンを押すと聞けます。入っていなければ、コピー済みなので貼り付けてください。
               </p>
             )}
             {asked && !asked.ok && (
