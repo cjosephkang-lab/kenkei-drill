@@ -79,7 +79,7 @@ describe("画面の回帰", () => {
       />,
     );
     expect(html).toContain("建設業経理士2級の過去問");
-    expect(html).toContain('<button class="gs on">2級</button>');
+    expect(html).not.toContain("grade-switch"); // 1級は非表示（2026-10-31 CEO）なので切り替えを出さない
     expect(html).toContain("大問別");
     expect(html).not.toContain("模試");
     expect(html).not.toContain("財務分析");

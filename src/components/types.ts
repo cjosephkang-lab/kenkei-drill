@@ -28,4 +28,6 @@ export const SUBJECT_LABEL: Record<Subject, string> = {
 };
 
 export type Grade = 1 | 2;
+// 画面に出す級。1級は 2026-10-31 CEO「1級は非表示にして」で外した（データと記録は残す。戻す時は [1, 2]）
+export const SHOWN_GRADES: Grade[] = [2];
 export const gradeOf = (subject: Subject): Grade => (subject === "kyu2" ? 2 : 1);

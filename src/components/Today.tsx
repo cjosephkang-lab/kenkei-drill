@@ -6,7 +6,12 @@ import {
   type RecordsState,
 } from "../lib/records";
 import { estimateSubjectScore, countFirstLooks } from "../lib/scoring";
-import type { FullQuestion, Grade, Page } from "./types";
+import {
+  SHOWN_GRADES,
+  type FullQuestion,
+  type Grade,
+  type Page,
+} from "./types";
 import { SUBJECT_LABEL } from "./types";
 
 const dateText = (date: string) =>
@@ -52,7 +57,9 @@ export function Today({
 }) {
   const eligible = questions.filter((question) => !question.mock);
   const modes = countModes(questions, records.questionRecords, new Date());
-  const subjects = SUBJECT_ORDER.filter((s) => (grade === 1 ? s !== "kyu2" : s === "kyu2"));
+  const subjects = SUBJECT_ORDER.filter((s) =>
+    grade === 1 ? s !== "kyu2" : s === "kyu2",
+  );
   const minutes = studyMinutesByDay(records.studySessions);
   const studied = Math.round(todayMinutes);
   const pct = Math.min(
@@ -88,17 +95,19 @@ export function Today({
         </div>
         <div className="grade">{grade}級・公式過去問</div>
       </div>
-      <div className="grade-switch">
-        {([1, 2] as Grade[]).map((value) => (
-          <button
-            key={value}
-            className={`gs ${grade === value ? "on" : ""}`}
-            onClick={() => onGrade(value)}
-          >
-            {value}級
-          </button>
-        ))}
-      </div>
+      {SHOWN_GRADES.length > 1 && (
+        <div className="grade-switch">
+          {SHOWN_GRADES.map((value) => (
+            <button
+              key={value}
+              className={`gs ${grade === value ? "on" : ""}`}
+              onClick={() => onGrade(value)}
+            >
+              {value}級
+            </button>
+          ))}
+        </div>
+      )}
       <div className="today">
         <div className="today-top">
           <div>
@@ -257,8 +266,8 @@ export function Today({
       </div>
       <p className="footnote">
         問題: 一般財団法人 建設業振興基金 公表の試験問題
-        {grade === 2 ? "（文字に起こしたもの）。答え・解説" : "。解答・解説"}: TAC
-        解答速報。学習の記録はこの端末のブラウザにだけ保存されます。
+        {grade === 2 ? "（文字に起こしたもの）。答え・解説" : "。解答・解説"}:
+        TAC 解答速報。学習の記録はこの端末のブラウザにだけ保存されます。
       </p>
     </section>
   );

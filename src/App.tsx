@@ -27,7 +27,7 @@ import { Shell } from "./components/Shell";
 import { Today } from "./components/Today";
 import { Unlock } from "./components/Unlock";
 import type { FullQuestion, Grade, Page } from "./components/types";
-import { SUBJECT_LABEL, gradeOf } from "./components/types";
+import { SHOWN_GRADES, SUBJECT_LABEL, gradeOf } from "./components/types";
 
 const KEY_STORAGE = "kenkei-drill.key.v1";
 const GRADE_STORAGE = "kenkei-drill.grade.v1";
@@ -44,9 +44,10 @@ function App() {
   const [key, setKey] = useState<CryptoKey | null>(null);
   const [records, setRecords] = useState<RecordsState>(() => loadRecords());
   const [page, setPage] = useState<Page>("home");
-  const [grade, setGradeState] = useState<Grade>(() =>
-    localStorage.getItem(GRADE_STORAGE) === "2" ? 2 : 1,
-  );
+  const [grade, setGradeState] = useState<Grade>(() => {
+    const stored = Number(localStorage.getItem(GRADE_STORAGE)) as Grade;
+    return SHOWN_GRADES.includes(stored) ? stored : SHOWN_GRADES[0];
+  });
   const setGrade = (value: Grade) => {
     setGradeState(value);
     try {
@@ -196,7 +197,10 @@ function App() {
       </Shell>
     );
   // 2級の束が読めなかった時に、1級の自己採点の画面へ落ちないようにする
-  if (page === "study" && (loading || !current || (current.subject === "kyu2" && !current.kyu2)))
+  if (
+    page === "study" &&
+    (loading || !current || (current.subject === "kyu2" && !current.kyu2))
+  )
     return (
       <Shell>
         <div className="wrap">
