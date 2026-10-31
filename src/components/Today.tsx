@@ -1,12 +1,12 @@
 import type { IndexData } from "../lib/bundles";
-import { countModes, type QueueMode, type Subject } from "../lib/schedule";
+import { countModes, SUBJECT_ORDER, type QueueMode } from "../lib/schedule";
 import {
   studyMinutesByDay,
   studyStreak,
   type RecordsState,
 } from "../lib/records";
 import { estimateSubjectScore, countFirstLooks } from "../lib/scoring";
-import type { FullQuestion, Page } from "./types";
+import type { FullQuestion, Grade, Page } from "./types";
 import { SUBJECT_LABEL } from "./types";
 
 const dateText = (date: string) =>
@@ -20,6 +20,8 @@ const dateText = (date: string) =>
 export function Today({
   index,
   questions,
+  grade,
+  onGrade,
   records,
   days,
   todayMinutes,
@@ -34,6 +36,8 @@ export function Today({
 }: {
   index: IndexData;
   questions: FullQuestion[];
+  grade: Grade;
+  onGrade: (grade: Grade) => void;
   records: RecordsState;
   days: number;
   todayMinutes: number;
@@ -48,7 +52,7 @@ export function Today({
 }) {
   const eligible = questions.filter((question) => !question.mock);
   const modes = countModes(questions, records.questionRecords, new Date());
-  const subjects: Subject[] = ["zaibun", "zaihyou", "genka"];
+  const subjects = SUBJECT_ORDER.filter((s) => (grade === 1 ? s !== "kyu2" : s === "kyu2"));
   const minutes = studyMinutesByDay(records.studySessions);
   const studied = Math.round(todayMinutes);
   const pct = Math.min(
@@ -78,9 +82,22 @@ export function Today({
       <div className="masthead">
         <div>
           <h1>建設業経理士ドリル</h1>
-          <p className="sub">建設業経理士1級の過去問（{roundText}）</p>
+          <p className="sub">
+            建設業経理士{grade}級の過去問（{roundText}）
+          </p>
         </div>
-        <div className="grade">1級・公式過去問</div>
+        <div className="grade">{grade}級・公式過去問</div>
+      </div>
+      <div className="grade-switch">
+        {([1, 2] as Grade[]).map((value) => (
+          <button
+            key={value}
+            className={`gs ${grade === value ? "on" : ""}`}
+            onClick={() => onGrade(value)}
+          >
+            {value}級
+          </button>
+        ))}
       </div>
       <div className="today">
         <div className="today-top">
@@ -145,19 +162,23 @@ export function Today({
           <div className="m-b">{modes.unsolved} 題</div>
         </button>
         <button className="mode" onClick={() => onNavigate("cats")}>
-          <div className="m-t">科目別</div>
-          <div className="m-s">科目を選んで解く</div>
-          <div className="m-b">全3科目</div>
+          <div className="m-t">{grade === 1 ? "科目別" : "大問別"}</div>
+          <div className="m-s">
+            {grade === 1 ? "科目を選んで解く" : "第1〜5問を選んで解く"}
+          </div>
+          <div className="m-b">{grade === 1 ? "全3科目" : "全5問"}</div>
         </button>
-        <button
-          className="mode"
-          disabled={!mockSubjects}
-          onClick={() => onNavigate("mock")}
-        >
-          <div className="m-t">模試</div>
-          <div className="m-s">第39回を本番と同じ90分で</div>
-          <div className="m-b">{mockSubjects} 科目</div>
-        </button>
+        {grade === 1 && (
+          <button
+            className="mode"
+            disabled={!mockSubjects}
+            onClick={() => onNavigate("mock")}
+          >
+            <div className="m-t">模試</div>
+            <div className="m-s">第39回を本番と同じ90分で</div>
+            <div className="m-b">{mockSubjects} 科目</div>
+          </button>
+        )}
       </div>
       <div className="slab">学習状況</div>
       <div className="board">
@@ -235,7 +256,8 @@ export function Today({
         </button>
       </div>
       <p className="footnote">
-        問題: 一般財団法人 建設業振興基金 公表の試験問題。解答・解説: TAC
+        問題: 一般財団法人 建設業振興基金 公表の試験問題
+        {grade === 2 ? "（文字に起こしたもの）。答え・解説" : "。解答・解説"}: TAC
         解答速報。学習の記録はこの端末のブラウザにだけ保存されます。
       </p>
     </section>

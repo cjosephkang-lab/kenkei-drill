@@ -16,6 +16,9 @@ def source_characters() -> str:
     text = ""
     for path in (ROOT / "src").rglob("*.ts*"):
         text += path.read_text(encoding="utf-8")
+    # 2級は問題文を文字で出すので、文字に起こした問題（コミットしない）の文字も入れる
+    for path in (ROOT / "source-2kyu").rglob("*.json"):
+        text += path.read_text(encoding="utf-8")
     text += "".join(chr(code) for code in range(0x3040, 0x30A0))
     text += "".join(chr(code) for code in range(0x30A0, 0x30FF))
     text += "０１２３４５６７８９"

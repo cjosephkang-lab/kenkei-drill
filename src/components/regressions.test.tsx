@@ -4,6 +4,7 @@ import { Result } from "./Result";
 import { Today } from "./Today";
 import { Question } from "./Question";
 import type { FullQuestion } from "./types";
+import { loadRecords } from "../lib/records";
 
 const question: FullQuestion = {
   id: "38-a-1",
@@ -23,6 +24,8 @@ describe("画面の回帰", () => {
   it("単一回の範囲・実際の模試科目数・未収録科目・空のモードを表示する", () => {
     const html = renderToStaticMarkup(
       <Today
+        grade={1}
+        onGrade={noop}
         index={{
           version: 1,
           examDate: "2027-03-14",
@@ -57,6 +60,30 @@ describe("画面の回帰", () => {
     expect(html).toContain("収録なし");
     expect(html).not.toContain("0／0題");
     expect(html).toMatch(/class="mode" disabled=""[^>]*><div class="m-t">復習/);
+  });
+
+  it("2級のホームは模試を出さず、大問別と2級の予想点を出す", () => {
+    const html = renderToStaticMarkup(
+      <Today
+        grade={2}
+        onGrade={noop}
+        index={{ version: 1, examDate: "2027-03-14", exams: [] }}
+        questions={[{ ...question, id: "382-1", examId: "382", subject: "kyu2", mock: false }]}
+        records={loadRecords()}
+        days={100}
+        todayMinutes={0}
+        onStart={noop}
+        onMode={noop}
+        onNavigate={noop}
+        onGoal={noop}
+      />,
+    );
+    expect(html).toContain("建設業経理士2級の過去問");
+    expect(html).toContain('<button class="gs on">2級</button>');
+    expect(html).toContain("大問別");
+    expect(html).not.toContain("模試");
+    expect(html).not.toContain("財務分析");
+    expect(html).toContain("<span>2級</span>");
   });
 
   it("大問の現在位置と全体数から進行表示を計算する", () => {

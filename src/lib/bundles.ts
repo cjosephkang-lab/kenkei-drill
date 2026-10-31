@@ -1,10 +1,11 @@
 import { decryptBundleWithKey, deriveKey } from "./crypto";
 import type { Subject } from "./schedule";
+import type { Kyu2Data } from "./kyu2";
 
 export type IndexQuestion = { no: number; points: number };
 export type IndexExam = { id: string; round: number; date: string; subject: Subject; mock?: boolean; questions: IndexQuestion[] };
 export type IndexData = { version: number; examDate: string; exams: IndexExam[] };
-export type BundleQuestion = { no: number; points: number; problem: string[]; answer: string[]; explain: string[]; items: { label?: string; answer: string; choices?: string[] }[] };
+export type BundleQuestion = { no: number; points: number; problem: string[]; answer: string[]; explain: string[]; items: { label?: string; answer: string; choices?: string[] }[]; kyu2?: Kyu2Data };
 export type ExamBundle = { id: string; questions: BundleQuestion[] };
 
 const cache = new Map<string, Promise<ExamBundle>>();

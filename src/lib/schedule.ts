@@ -1,5 +1,5 @@
-export type Subject = "zaibun" | "zaihyou" | "genka";
-export const SUBJECT_ORDER: Subject[] = ["zaibun", "zaihyou", "genka"];
+export type Subject = "zaibun" | "zaihyou" | "genka" | "kyu2";
+export const SUBJECT_ORDER: Subject[] = ["zaibun", "zaihyou", "genka", "kyu2"];
 
 export type ScheduleQuestion = {
   id: string;
@@ -61,10 +61,13 @@ export const queueFor = (
   records: Record<string, QuestionRecord>,
   now = new Date(),
   subject?: Subject,
+  no?: number,
 ) => {
   if (mode === "today") return orderTodayQuestions(questions, records, now);
   const eligible = availableQuestions(questions).filter(
-    (question) => mode !== "subject" || question.subject === subject,
+    (question) =>
+      mode !== "subject" ||
+      (question.subject === subject && (no === undefined || question.no === no)),
   );
   const sort = (a: ScheduleQuestion, b: ScheduleQuestion) => {
     const subjectOrder =

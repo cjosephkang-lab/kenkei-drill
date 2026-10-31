@@ -22,13 +22,15 @@ import { Cats } from "./components/Cats";
 import { Result } from "./components/Result";
 import { Mock } from "./components/Mock";
 import { Question } from "./components/Question";
+import { Kyu2Question } from "./components/Kyu2Question";
 import { Shell } from "./components/Shell";
 import { Today } from "./components/Today";
 import { Unlock } from "./components/Unlock";
-import type { FullQuestion, Page } from "./components/types";
-import { SUBJECT_LABEL } from "./components/types";
+import type { FullQuestion, Grade, Page } from "./components/types";
+import { SUBJECT_LABEL, gradeOf } from "./components/types";
 
 const KEY_STORAGE = "kenkei-drill.key.v1";
+const GRADE_STORAGE = "kenkei-drill.grade.v1";
 const todayKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const daysUntil = (date: string) =>
@@ -42,6 +44,17 @@ function App() {
   const [key, setKey] = useState<CryptoKey | null>(null);
   const [records, setRecords] = useState<RecordsState>(() => loadRecords());
   const [page, setPage] = useState<Page>("home");
+  const [grade, setGradeState] = useState<Grade>(() =>
+    localStorage.getItem(GRADE_STORAGE) === "2" ? 2 : 1,
+  );
+  const setGrade = (value: Grade) => {
+    setGradeState(value);
+    try {
+      localStorage.setItem(GRADE_STORAGE, String(value));
+    } catch {
+      // 保存できない端末では、開き直すと1級に戻るだけ
+    }
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState(false);
@@ -68,14 +81,18 @@ function App() {
       window.clearInterval(timer);
     };
   }, []);
+  const visible = useMemo(
+    () => questions.filter((question) => gradeOf(question.subject) === grade),
+    [questions, grade],
+  );
   const schedule = useMemo(
     () =>
       orderTodayQuestions(
-        questions,
+        visible,
         records.questionRecords,
         new Date(),
       ) as FullQuestion[],
-    [questions, records.questionRecords, scheduleVersion],
+    [visible, records.questionRecords, scheduleVersion],
   );
   const current = questions.find((question) => question.id === selectedId);
   const todayMinutes =
@@ -132,18 +149,19 @@ function App() {
     beginSession(items, name);
     void openQuestion(items[0]);
   };
-  const beginMode = (mode: QueueMode, subject?: Subject) => {
+  const beginMode = (mode: QueueMode, subject?: Subject, no?: number) => {
     const items = queueFor(
       mode,
-      questions,
+      visible,
       records.questionRecords,
       new Date(),
       subject,
+      no,
     ) as FullQuestion[];
     begin(
       items,
       mode === "subject" && subject
-        ? `科目別：${SUBJECT_LABEL[subject]}`
+        ? `科目別：${SUBJECT_LABEL[subject]}${no ? ` 第${no}問` : ""}`
         : mode === "review"
           ? "復習"
           : mode === "unsolved"
@@ -152,7 +170,7 @@ function App() {
     );
   };
   const finish = (value: number) => {
-    if (!current || !study.startedAt) return;
+    if (!current || !study.startedAt) return false;
     const updated = completeQuestion(
       records,
       current,
@@ -161,11 +179,12 @@ function App() {
       study.startedAt,
       new Date().toISOString(),
     );
-    if (!persist(updated)) return;
+    if (!persist(updated)) return false;
     study.clear();
     const next = advance({ score: value, points: current.points });
     if (next) void openQuestion(next);
     else setPage("result");
+    return true;
   };
   if (!key) return <Unlock error={error} onUnlock={unlock} />;
   if (!index)
@@ -176,7 +195,8 @@ function App() {
         </div>
       </Shell>
     );
-  if (page === "study" && (loading || !current))
+  // 2級の束が読めなかった時に、1級の自己採点の画面へ落ちないようにする
+  if (page === "study" && (loading || !current || (current.subject === "kyu2" && !current.kyu2)))
     return (
       <Shell>
         <div className="wrap">
@@ -201,7 +221,9 @@ function App() {
     page === "home" ? (
       <Today
         index={index}
-        questions={questions}
+        questions={visible}
+        grade={grade}
+        onGrade={setGrade}
         records={records}
         days={daysUntil(index.examDate)}
         todayMinutes={todayMinutes}
@@ -218,10 +240,11 @@ function App() {
       />
     ) : page === "cats" ? (
       <Cats
-        questions={questions}
+        questions={visible}
+        grade={grade}
         records={records}
         onBack={() => setPage("home")}
-        onStart={(subject) => beginMode("subject", subject)}
+        onStart={(subject, no) => beginMode("subject", subject, no)}
       />
     ) : page === "mock" ? (
       <Mock
@@ -232,6 +255,19 @@ function App() {
         loading={mockLoading}
         onStart={startMock}
         onBack={() => setPage("home")}
+      />
+    ) : page === "study" && current?.kyu2 ? (
+      <Kyu2Question
+        key={current.id}
+        question={current}
+        elapsed={study.elapsed}
+        onFinish={finish}
+        position={session.index + 1}
+        total={session.queue.length}
+        onBack={() => {
+          study.pause();
+          setPage("home");
+        }}
       />
     ) : page === "study" ? (
       <Question

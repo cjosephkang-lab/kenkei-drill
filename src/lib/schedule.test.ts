@@ -102,6 +102,21 @@ describe("今日やる順", () => {
     ).toEqual(["due", "new"]);
   });
 
+  it("2級の科目別は大問の番号でも絞れる", () => {
+    const kyu2: ScheduleQuestion[] = [1, 5, 1].map((no, i) => ({
+      id: `3${5 + i}2-${no}`,
+      subject: "kyu2",
+      examId: `3${5 + i}2`,
+      round: 35 + i,
+      no,
+      points: 20,
+    }));
+    expect(
+      queueFor("subject", kyu2, {}, new Date(), "kyu2", 1).map((q) => q.id),
+    ).toEqual(["372-1", "352-1"]);
+    expect(queueFor("subject", kyu2, {}, new Date(), "kyu2")).toHaveLength(3);
+  });
+
   it("復習と未着手の件数を返す", () => {
     expect(
       countModes(questions, records, new Date("2026-10-20T00:00:00Z")),

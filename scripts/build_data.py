@@ -46,6 +46,11 @@ SUBJECTS = {  # 記号: (公式の記号, TACの科目名候補)
 }
 OLD_TAC = {"zaihyou": "1zaihyok", "zaibun": "1zaibunk", "genka": "1genkeik"}  # 第34回だけ別名
 
+# 2級: 問題と答えは文字に起こした JSON（source-2kyu/<回>/q<番号>.json。docs/kyu2-data-format.md）。
+# 解説だけ TAC の PDF（source-pdfs/tac-2kyu/）から大問ごとに画像で切り出す。設計: docs/superpowers/specs/2026-10-31-kyu2-design.md
+KYU2_SRC = ROOT / "source-2kyu"
+KYU2_ROUNDS = [35, 36, 37, 38]
+
 ZEN = str.maketrans("０１２３４５６７８９", "0123456789")
 JUNK = re.compile(r"著作権|\.indd|^\d{4}/\d\d/\d\d|^[0-9０-９\s\-－]+$|^第.{1,3}回建設業経理士")
 
@@ -305,21 +310,80 @@ def build_exam(rnd: int, subj: str, tmp: Path) -> dict:
     return {"id": exam_id, "round": rnd, "date": ROUNDS[rnd][0], "subject": subj, "mock": rnd in MOCK_ROUNDS, "questions": questions}
 
 
+def build_kyu2(rnd: int, tmp: Path) -> dict:
+    exam_id = f"{rnd}2"
+    tag = ROUNDS[rnd][2]
+    explains: dict[int, Section] = {}
+    pages: dict[Path, dict[int, Image.Image]] = {}
+    for pdf in sorted((SRC / "tac-2kyu").glob(f"2q_{tag}_kai*.pdf")):
+        found = [sec for sec in sections_of(pdf, None) if sec.kind == "explain"]
+        # 第36回の解説は第4問の見出しが「第３問」と刷られている。見出しが重なって5つなら、出てきた順に振る
+        if len(found) == 5 and len({sec.no for sec in found}) < 5:
+            for n, sec in enumerate(found, 1):
+                sec.no = n
+        for sec in found:
+            if sec.no not in explains:
+                explains[sec.no] = sec
+                if pdf not in pages:
+                    pages[pdf] = render_pages(pdf, tmp)
+    questions = []
+    for no in range(1, 6):
+        q = json.loads((KYU2_SRC / str(rnd) / f"q{no}.json").read_text(encoding="utf-8"))
+        exp = explains.get(no)
+        questions.append({
+            "no": no,
+            "points": q["points"],
+            "problem": [],
+            "answer": [],
+            "explain": crop_section(exp, pages[exp.pdf]) if exp else [],
+            "items": [],
+            "kyu2": {"title": q["title"], "problem": q["problem"], "parts": q["parts"]},
+        })
+    total = sum(q["points"] for q in questions)
+    if total != 100:
+        raise ValueError(f"{exam_id}: 配点合計が100でない: {total}")
+    return {"id": exam_id, "round": rnd, "date": ROUNDS[rnd][0], "subject": "kyu2", "mock": False, "questions": questions}
+
+
 class Encryptor:
     """アプリは最初の束で導出した鍵を全部の束に使うので、1回の生成では salt を1つにそろえる。"""
 
-    def __init__(self, password: str):
+    def __init__(self, password: str, salt: bytes | None = None):
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-        self.salt = os.urandom(16)
+        self.salt = salt or os.urandom(16)
         self.key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=self.salt, iterations=200_000).derive(password.encode())
+
 
     def __call__(self, data: bytes) -> bytes:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
         iv = os.urandom(12)
         return self.salt + iv + AESGCM(self.key).encrypt(iv, data, None)
+
+
+def existing_salt(out_dir: Path, password: str) -> bytes | None:
+    """公開済みの束があれば、その salt を引き継ぐ。端末に保存済みの鍵（salt から作る）がそのまま使えるように。
+    パスワードが既存の束と合わなければ止める（違う鍵の束を混ぜない）。"""
+    index_file = out_dir / "index.json"
+    if not index_file.exists():
+        print("公開済みの束が無いので新しい salt で作る（端末に保存済みの鍵では読めなくなる）", file=sys.stderr)
+        return None
+    exams = json.loads(index_file.read_text(encoding="utf-8")).get("exams", [])
+    first = out_dir / f"{exams[0]['id']}.bin" if exams else None
+    if not first or not first.exists():
+        print("公開済みの束が無いので新しい salt で作る（端末に保存済みの鍵では読めなくなる）", file=sys.stderr)
+        return None
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    raw = first.read_bytes()
+    enc = Encryptor(password, raw[:16])
+    try:
+        AESGCM(enc.key).decrypt(raw[16:28], raw[28:], None)
+    except Exception:
+        sys.exit(f"KENKEI_PASSWORD が公開済みの束（{first.name}）と合わない")
+    return raw[:16]
 
 
 def main() -> None:
@@ -335,8 +399,8 @@ def main() -> None:
         sys.exit("KENKEI_PASSWORD が無い")
     items_file = ROOT / "data-src" / "items.json"
     items = json.loads(items_file.read_text(encoding="utf-8")) if items_file.exists() else {}
-    encrypt = None if args.plain else Encryptor(password)
     out_dir = ROOT / ("build/plain" if args.plain else "public/data")
+    encrypt = None if args.plain else Encryptor(password, existing_salt(out_dir, password))
     out_dir.mkdir(parents=True, exist_ok=True)
     index = {"version": 1, "examDate": "2027-03-14", "exams": []}
     for rnd in ROUNDS:
@@ -360,6 +424,24 @@ def main() -> None:
             size = sum(len(u) for q in exam["questions"] for k in ("problem", "answer", "explain") for u in q[k])
             print(f"{exam_id}: 配点 {[q['points'] for q in exam['questions']]} 画像 {size/1e6:.1f}MB "
                   f"解説なし {[q['no'] for q in exam['questions'] if not q['explain']]}", flush=True)
+    for rnd in KYU2_ROUNDS:
+        exam_id = f"{rnd}2"
+        if args.only and exam_id != args.only:
+            continue
+        with tempfile.TemporaryDirectory() as t:
+            exam = build_kyu2(rnd, Path(t))
+        index["exams"].append({
+            "id": exam_id, "round": rnd, "date": exam["date"], "subject": "kyu2", "mock": False,
+            "questions": [{"no": q["no"], "points": q["points"]} for q in exam["questions"]],
+        })
+        payload = {"id": exam_id, "questions": exam["questions"]}
+        if args.plain:
+            (out_dir / f"{exam_id}.json").write_text(json.dumps(exam, ensure_ascii=False), encoding="utf-8")
+        else:
+            (out_dir / f"{exam_id}.bin").write_bytes(encrypt(json.dumps(payload, ensure_ascii=False).encode()))
+        size = sum(len(u) for q in exam["questions"] for u in q["explain"])
+        print(f"{exam_id}: 配点 {[q['points'] for q in exam['questions']]} 解説の画像 {size/1e6:.1f}MB "
+              f"解説なし {[q['no'] for q in exam['questions'] if not q['explain']]}", flush=True)
     (out_dir / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
