@@ -1,4 +1,4 @@
-import { isSeisan, seisanInputs } from "./seisan";
+import { isSeisan, seisanInputs, typedIntoTable } from "./seisan";
 // 2級の大問: 問題文の並びと答えの欄、端末の中での採点。形の決まりは docs/kyu2-data-format.md
 export type Kyu2Block =
   | { t: "p"; text: string }
@@ -184,7 +184,7 @@ export const gradeQuestion = (
       });
     } else {
       // 精算表は整理仕訳から欄を組み立てて採点する（seisan.ts）
-      const cells = isSeisan(part) ? { ...inputs, ...seisanInputs(part, i, inputs) } : inputs;
+      const cells = isSeisan(part) && !typedIntoTable(inputs, i) ? { ...inputs, ...seisanInputs(part, i, inputs) } : inputs;
       part.rows.forEach((row, r) =>
         row.forEach((cell, c) => {
           if (typeof cell === "string") return;

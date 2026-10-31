@@ -12,7 +12,7 @@ import {
 } from "../lib/kyu2";
 import { askPrompt, askUrl, explainByPart } from "../lib/kyu2Explain";
 import { loadMemo, saveMemo } from "../lib/memo";
-import { entryCount, isSeisan, seisanAccounts, seisanInputs } from "../lib/seisan";
+import { entryCount, isSeisan, seisanAccounts, seisanInputs, typedIntoTable } from "../lib/seisan";
 import { ImageViewer } from "./ImageViewer";
 import type { FullQuestion } from "./types";
 
@@ -470,7 +470,7 @@ export function Kyu2Question({
                   {...field}
                 />
               )}
-              {part.kind === "table" && isSeisan(part) && (
+              {part.kind === "table" && isSeisan(part) && !typedIntoTable(inputs, i) && (
                 <Seisan
                   part={part}
                   i={i}
@@ -478,7 +478,7 @@ export function Kyu2Question({
                   {...field}
                 />
               )}
-              {part.kind === "table" && !isSeisan(part) && (
+              {part.kind === "table" && (!isSeisan(part) || typedIntoTable(inputs, i)) && (
                 <Table
                   part={part}
                   i={i}

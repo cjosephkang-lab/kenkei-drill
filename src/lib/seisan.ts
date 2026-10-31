@@ -10,6 +10,11 @@ export const isSeisan = (part: Kyu2Part): boolean =>
   `${part.label}${part.title ?? ""}`.includes("精算表") &&
   part.rows.every((row) => row.length === 9);
 
+// 整理仕訳で解く形（2026-10-31）より前に、精算表の欄へ直接打った下書き・答え。仕訳が1つも無く表の欄に値があれば、表に打つ形のまま扱う
+export const typedIntoTable = (inputs: Kyu2Inputs, i: number) =>
+  !Object.keys(inputs).some((key) => key.startsWith(`${i}:j:`) && inputs[key]) &&
+  Object.keys(inputs).some((key) => /^\d+:\d+:\d+$/.test(key) && key.startsWith(`${i}:`) && inputs[key]);
+
 const nameOf = (row: Kyu2Cell[]) => (typeof row[0] === "string" ? row[0].trim() : "");
 const isNetIncome = (row: Kyu2Cell[]) => nameOf(row).includes("当期");
 

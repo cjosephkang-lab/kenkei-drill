@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { gradeQuestion, type Kyu2Data, type Kyu2Part } from "./kyu2";
-import { isSeisan, seisanAccounts, seisanInputs } from "./seisan";
+import {
+  isSeisan,
+  seisanAccounts,
+  seisanInputs,
+  typedIntoTable,
+} from "./seisan";
 
 // 小さな精算表: 試算表の行・試算表の合計・足す科目・小計・当期純利益・合計
 const e = (...a: number[]) => ({ a });
@@ -98,8 +103,21 @@ describe("精算表を整理仕訳から組み立てる", () => {
     expect(cells["0:9:6"]).toBe("5,400"); // 損益計算書の合計は費用側 5,400 にそろう
   });
 
-  it("表に直接打った古い下書きは、仕訳から組み立てた値で上書きする", () => {
+  it("組み立てる値は仕訳と試算表だけから決まり、表の欄に入った値は使わない", () => {
     const cells = seisanInputs(part, 0, { "0:0:7": "999" });
     expect(cells["0:0:7"]).toBe("1,000");
+  });
+
+  it("前に表の欄へ直接打った答えは、表に打つ形のまま採点する（仕訳が無いので組み立て直さない）", () => {
+    const old: Record<string, string> = {};
+    part.rows.forEach((row, r) =>
+      row.forEach((cell, c) => {
+        if (typeof cell !== "string" && "a" in cell && cell.a.length)
+          old[`0:${r}:${c}`] = String(cell.a.reduce((x, y) => x + y, 0));
+      }),
+    );
+    expect(typedIntoTable(old, 0)).toBe(true);
+    expect(typedIntoTable(typed, 0)).toBe(false);
+    expect(gradeQuestion(data, 30, old).score).toBe(30);
   });
 });
